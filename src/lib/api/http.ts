@@ -51,6 +51,27 @@ export function httpClient(baseUrl: string): ArtemisClient {
     return body as T;
   }
 
+  /**
+   * Assert a mutation succeeded. The write endpoints return 200 with **no body**,
+   * so we never parse JSON on success; a non-2xx `{error}` body becomes an
+   * `ApiError` (best-effort — an empty/HTML error body falls back to the status).
+   */
+  async function expectOk(res: Response): Promise<void> {
+    if (res.ok) return;
+    const text = await res.text();
+    let body: unknown;
+    try {
+      body = text ? JSON.parse(text) : undefined;
+    } catch {
+      body = undefined;
+    }
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : `HTTP ${res.status}`;
+    throw new ApiError(message, res.status);
+  }
+
   return {
     live: true,
     baseUrl: root,
@@ -232,6 +253,42 @@ export function httpClient(baseUrl: string): ArtemisClient {
           aliasOf: typeof r.alias_of === "string" ? r.alias_of : undefined,
         };
       });
+    },
+
+    // --- catalog: write surface --------------------------------------------
+
+    async patchTags(id: string, tags: string[]): Promise<void> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/tags`), {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tags }),
+      });
+      await expectOk(res);
+    },
+
+    async setFavorite(id: string, favorite: boolean): Promise<void> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/favorite`), {
+        method: favorite ? "POST" : "DELETE",
+      });
+      await expectOk(res);
+    },
+
+    async scorePost(id: string, delta: number): Promise<void> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/score`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ delta }),
+      });
+      await expectOk(res);
+    },
+
+    async setRating(id: string, rating: Rating): Promise<void> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/rating`), {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rating }),
+      });
+      await expectOk(res);
     },
   };
 }

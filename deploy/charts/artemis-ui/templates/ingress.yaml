@@ -11,8 +11,12 @@ metadata:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
   {{- end }}
 spec:
-  # className may be "" (load-bearing) for the tailnet exposure pattern.
+  # OMIT ingressClassName entirely when empty — an empty-string value is
+  # RFC-1123-invalid and k8s rejects it; omitting the field is what lets k3s's
+  # Traefik adopt the ingress (the "load-bearing empty className" pattern).
+  {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- end }}
   {{- if .Values.ingress.clusterIssuer }}
   tls:
     - hosts:

@@ -10,6 +10,7 @@ import {
   type PostStatusResult,
   type PostSummary,
   type PurgeOutcome,
+  type Rating,
   type ReprocessRequest,
   type ReprocessResult,
   type SearchQuery,
@@ -286,6 +287,34 @@ export function fixtureClient(): ArtemisClient {
   // live endpoints would 404). Unknown ids behave like an active post.
   const status = new Map<string, "active" | "deleted" | "purged">();
   const statusOf = (id: string) => status.get(id) ?? "active";
+  // A mutable overlay of full posts, materialized lazily from the summary set on
+  // first read. The write methods mutate this so edits (tags/favorite/score/rating)
+  // persist within a session — GET /posts/{id} reflects them (read-your-writes).
+  const posts = new Map<string, Post>();
+  function livePost(id: string): Post | null {
+    const existing = posts.get(id);
+    if (existing) return existing;
+    const summary = FIXTURE_BY_ID.get(id);
+    if (!summary) return null;
+    const post: Post = {
+      id: summary.id,
+      status: summary.status,
+      tags: [...summary.tags],
+      rating: summary.rating,
+      score: summary.score,
+      favorited: false,
+      parent: summary.parent,
+      source: "https://example.invalid/source",
+      md5: summary.md5,
+      filetype: summary.duration != null ? "mp4" : "png",
+      width: summary.width,
+      height: summary.height,
+      duration: summary.duration,
+      derivatives: summary.derivatives,
+    };
+    posts.set(id, post);
+    return post;
+  }
   // A fixture pool of orphan debris that a real sweep would clear.
   let orphans = 4;
   return {
@@ -363,24 +392,11 @@ export function fixtureClient(): ArtemisClient {
     },
 
     async getPost(id: string): Promise<Post> {
-      const summary = FIXTURE_BY_ID.get(id);
-      if (!summary || statusOf(id) === "purged") throw new ApiError("post not found", 404);
-      return {
-        id: summary.id,
-        status: summary.status,
-        tags: summary.tags,
-        rating: summary.rating,
-        score: summary.score,
-        favorited: false,
-        parent: summary.parent,
-        source: "https://example.invalid/source",
-        md5: summary.md5,
-        filetype: summary.duration != null ? "mp4" : "png",
-        width: summary.width,
-        height: summary.height,
-        duration: summary.duration,
-        derivatives: summary.derivatives,
-      };
+      const post = livePost(id);
+      if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      // Return a copy so callers never mutate the fixture store directly (only the
+      // write methods do); tags is copied too since it is an array.
+      return { ...post, tags: [...post.tags] };
     },
 
     async facets(tags: string): Promise<Facets> {
@@ -433,6 +449,35 @@ export function fixtureClient(): ArtemisClient {
         }
       }
       return out.sort((a, b) => (b as { postCount: number }).postCount - (a as { postCount: number }).postCount).slice(0, 12);
+    },
+
+    // --- catalog: write surface --------------------------------------------
+    //
+    // Mutate the in-memory post so edits persist within the session (a subsequent
+    // getPost reflects them). A missing/purged post 404s like the live service.
+
+    async patchTags(id: string, tags: string[]): Promise<void> {
+      const post = livePost(id);
+      if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      post.tags = [...tags]; // full-set replace
+    },
+
+    async setFavorite(id: string, favorite: boolean): Promise<void> {
+      const post = livePost(id);
+      if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      post.favorited = favorite;
+    },
+
+    async scorePost(id: string, delta: number): Promise<void> {
+      const post = livePost(id);
+      if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      post.score += delta; // delta-based, like Artemis
+    },
+
+    async setRating(id: string, rating: Rating): Promise<void> {
+      const post = livePost(id);
+      if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      post.rating = rating;
     },
   };
 }
