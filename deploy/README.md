@@ -37,8 +37,8 @@ GitRepository + HelmRelease (Codex keeps the canonical copies under
 |---|---|---|
 | `image.repository` / `image.tag` | `calvinference/artemisui` / `latest` | pin to a released semver tag in prod |
 | `artemisUpstream` | `http://artemis.artemis.svc.cluster.local:8080` | **server-side** BFF target (not `NEXT_PUBLIC`) |
-| `replicaCount` | `2` | |
-| `ingress.enabled` | `false` | reach via port-forward; enable for Traefik/TLS, or tailnet (`className: ""`, `host: artemis-ui.tailscale`, omit `clusterIssuer`) |
+| `replicaCount` | `1` | single-node cluster |
+| `ingress.enabled` | `false` | reach via port-forward; enable for tailnet (`className: ""`, `host: artemis.tailscale`, no TLS) or Traefik+cert-manager (set `clusterIssuer`) |
 
 ### Local
 

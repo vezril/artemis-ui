@@ -34,7 +34,7 @@ spec:
     image:
       repository: calvinference/artemisui
       tag: 0.1.0
-    replicaCount: 2
+    replicaCount: 1
     # The SERVER-SIDE upstream the BFF proxy forwards to (browser talks only to
     # /api/artemis/* on this app's origin). Artemis is live in ns `artemis`.
     artemisUpstream: "http://artemis.artemis.svc.cluster.local:8080"
