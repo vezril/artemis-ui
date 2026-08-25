@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors";
                   if (item.comingSoon) {
                     return (
-                      <li key={item.href}>
+                      <li key={item.label}>
                         <span
                           className={cn(
                             base,
@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     );
                   }
                   return (
-                    <li key={item.href}>
+                    <li key={item.label}>
                       <Link
                         href={item.href}
                         aria-current={active ? "page" : undefined}
