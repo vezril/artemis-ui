@@ -11,41 +11,41 @@ export interface CuratedSignal {
 }
 
 /**
- * The operator-facing signals, in display order and grouped. Chosen to answer "is
- * it healthy / is the projection lagging / is the ingest draining", not to mirror
- * every metric — the raw view covers the rest. Names track Artemis's Micrometer
- * output; a renamed/removed metric simply shows "no data" on its card.
+ * The operator-facing signals, in display order and grouped. Chosen to answer "is it
+ * up / is the ingest consume-loop draining", not to mirror every metric — the raw
+ * view covers the rest. Names track Artemis's ACTUAL `/metrics` output, which uses the
+ * Prometheus JVM client naming (jvm_*, process_*) plus its own `artemis_*` counters —
+ * verified against the live service. A renamed/removed metric simply shows "no data".
  */
 export const CURATED_SIGNALS: CuratedSignal[] = [
-  { metric: "process_cpu_usage", title: "Process CPU", group: "Runtime", unit: "ratio" },
-  { metric: "jvm_memory_used_bytes", title: "Memory used", group: "Runtime", unit: "bytes" },
-  { metric: "jvm_threads_live_threads", title: "Live threads", group: "Runtime", unit: "count" },
+  { metric: "artemis_ready", title: "Ready", group: "Runtime", unit: "count" },
   {
-    metric: "http_server_requests_seconds_count",
-    title: "HTTP requests",
-    group: "HTTP",
+    metric: "process_resident_memory_bytes",
+    title: "Memory (RSS)",
+    group: "Runtime",
+    unit: "bytes",
+  },
+  { metric: "jvm_memory_bytes_used", title: "JVM memory used", group: "Runtime", unit: "bytes" },
+  { metric: "jvm_threads_current", title: "Live threads", group: "Runtime", unit: "count" },
+  { metric: "process_open_fds", title: "Open FDs", group: "Runtime", unit: "count" },
+  {
+    metric: "artemis_consume_messages_applied_total",
+    title: "Msgs applied",
+    group: "Consume loop",
     unit: "count",
   },
   {
-    metric: "artemis_projection_lag_events",
-    title: "Projection lag",
-    group: "Projection",
-    unit: "events",
-  },
-  {
-    metric: "artemis_hermes_consumed_total",
-    title: "Hermes consumed",
-    group: "Messaging",
+    metric: "artemis_consume_polls_total",
+    title: "Polls",
+    group: "Consume loop",
     unit: "count",
   },
   {
-    metric: "artemis_hermes_published_total",
-    title: "Hermes published",
-    group: "Messaging",
+    metric: "artemis_consume_poll_failures_total",
+    title: "Poll failures",
+    group: "Consume loop",
     unit: "count",
   },
-  { metric: "artemis_posts_active", title: "Active posts", group: "Catalog", unit: "count" },
-  { metric: "artemis_review_queue_depth", title: "Review queue", group: "Catalog", unit: "posts" },
 ];
 
 /**
