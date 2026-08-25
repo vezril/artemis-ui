@@ -13,6 +13,7 @@ import {
   type Rating,
   type ReprocessRequest,
   type ReprocessResult,
+  type ReviewItem,
   type SearchQuery,
   type Suggestion,
   type SweepOutcome,
@@ -226,6 +227,51 @@ const FIXTURE_POSTS: PostSummary[] = [
 
 const FIXTURE_BY_ID = new Map(FIXTURE_POSTS.map((p) => [p.id, p]));
 
+// --- review-queue fixtures --------------------------------------------------
+//
+// A small backlog of posts awaiting review, each with a few Argus suggestions of
+// varied confidence and source. The postIds reference real fixture posts so a
+// card's link to `/posts/{id}` resolves, and most suggested tags are in the tag
+// vocab above so `useTagCategories` colors them (a couple are absent to exercise
+// the general-category fallback). The queue shrinks as posts are resolved.
+
+/** The seed review backlog. `fixtureClient()` copies this into mutable state. */
+const REVIEW_BACKLOG: ReviewItem[] = [
+  {
+    postId: "01J8A7",
+    suggestions: [
+      { tag: "cat_ears", confidence: 0.94, source: "wd-tagger" },
+      { tag: "long_hair", confidence: 0.88, source: "ram++" },
+      { tag: "night", confidence: 0.72, source: "wd-tagger" },
+      { tag: "weapon", confidence: 0.51, source: "ram++" },
+      { tag: "monochrome", confidence: 0.42, source: "ram++" },
+    ],
+  },
+  {
+    postId: "01J8A2",
+    suggestions: [
+      { tag: "raiden_shogun", confidence: 0.98, source: "wd-tagger" },
+      { tag: "genshin_impact", confidence: 0.95, source: "ram++" },
+      { tag: "solo", confidence: 0.9, source: "wd-tagger" },
+      { tag: "sword", confidence: 0.63, source: "wd-tagger" },
+    ],
+  },
+  {
+    postId: "01J8A1",
+    suggestions: [
+      { tag: "outdoors", confidence: 0.91, source: "wd-tagger" },
+      { tag: "sky", confidence: 0.85, source: "ram++" },
+      { tag: "smile", confidence: 0.6, source: "wd-tagger" },
+      { tag: "blue_sky", confidence: 0.47, source: "ram++" },
+    ],
+  },
+];
+
+/** Deep-copy a review item so callers never mutate the shared backlog. */
+function cloneReviewItem(item: ReviewItem): ReviewItem {
+  return { postId: item.postId, suggestions: item.suggestions.map((s) => ({ ...s })) };
+}
+
 /** A wildcard-aware tag matcher (`cat_*` / `*_ears`); exact otherwise. */
 function tagMatches(pattern: string, tag: string): boolean {
   if (pattern.includes("*")) {
@@ -343,6 +389,9 @@ export function fixtureClient(): ArtemisClient {
   }
   // A fixture pool of orphan debris that a real sweep would clear.
   let orphans = 4;
+  // A mutable copy of the review backlog; resolving a post removes it so the queue
+  // shrinks (like the live service clearing a review).
+  let reviewQueue: ReviewItem[] = REVIEW_BACKLOG.map(cloneReviewItem);
   return {
     live: false,
     baseUrl: null,
@@ -536,6 +585,31 @@ export function fixtureClient(): ArtemisClient {
       posts.set(id, post);
       uploadPolls.set(id, 0);
       return { postId: id, status: "pending" };
+    },
+
+    // --- catalog: review queue ---------------------------------------------
+    //
+    // Return a deep copy of the current backlog (callers never mutate it). Resolving
+    // a post removes it from the queue — and, when accepting tags, applies them to
+    // the in-memory post so a subsequent getPost reflects the review (coherent with
+    // the read/edit slices). Reject-all applies nothing.
+
+    async getReviewQueue(limit?: number): Promise<ReviewItem[]> {
+      const max = Math.max(0, Math.min(200, limit ?? 50));
+      return reviewQueue.slice(0, max).map(cloneReviewItem);
+    },
+
+    async reviewPost(id: string, accept: string[]): Promise<void> {
+      reviewQueue = reviewQueue.filter((item) => item.postId !== id);
+      if (accept.length > 0) {
+        const post = livePost(id);
+        if (post) {
+          // Union the accepted suggestions onto the post's tags (dedup, order-stable).
+          const set = new Set(post.tags);
+          for (const tag of accept) set.add(tag);
+          post.tags = [...set];
+        }
+      }
     },
   };
 }

@@ -9,6 +9,7 @@ import type {
   Rating,
   ReprocessRequest,
   ReprocessResult,
+  ReviewItem,
   SearchQuery,
   Suggestion,
   SweepOutcome,
@@ -128,4 +129,26 @@ export interface ArtemisClient {
    * down) / other non-2xx `{error}`.
    */
   upload(file: File, mediaType?: string): Promise<UploadResult>;
+
+  // --- catalog: review queue -------------------------------------------------
+  //
+  // Argus's tag suggestions are queued (never auto-applied); the human clears the
+  // backlog by accepting the right suggestions per post or rejecting all. There is
+  // no dedicated count endpoint — the needs-review count is the queue length.
+
+  /**
+   * `GET /review?limit=` → `{posts:[{postId, suggestions:[{tag, confidence,
+   * source}]}]}`. Returns the backlog of posts awaiting review (the top-level
+   * `posts` wrapper is unwrapped to `ReviewItem[]`). `limit` is optional (default
+   * 50, clamped `0..200`).
+   */
+  getReviewQueue(limit?: number): Promise<ReviewItem[]>;
+
+  /**
+   * `POST /posts/{id}/review` with `{accept}` — resolve one post. A non-empty
+   * `accept` applies exactly those tags; an **empty** `accept` (reject-all) applies
+   * nothing and clears the review. Either way the post leaves the queue. 200 with
+   * no body; throws `ApiError` on non-2xx.
+   */
+  reviewPost(id: string, accept: string[]): Promise<void>;
 }
