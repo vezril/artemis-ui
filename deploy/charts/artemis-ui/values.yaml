@@ -8,7 +8,8 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
-replicaCount: 2
+# Single-node homelab cluster — 1 replica (siblings ship 1).
+replicaCount: 1
 
 # The in-cluster Artemis REST base URL the SERVER-SIDE BFF proxy forwards to.
 # The BROWSER only ever calls this app's own origin (/api/artemis/*, baked into the
@@ -29,17 +30,19 @@ resources:
     memory: 512Mi
 
 # Exposure is off by default (per-service UI convention: reach it via port-forward,
-# or turn on ingress/tailnet on request). Two shapes are supported:
-#   - Traefik + cert-manager (LAN TLS): className: traefik, host, clusterIssuer, tlsSecretName.
-#   - Tailnet (hermes-ui pattern): className: "" (load-bearing), host: artemis-ui.tailscale,
-#     omit clusterIssuer/tlsSecretName (no TLS). Codex wires the NodePort side.
+# or turn exposure on when wanted). Defaults are the SAFE, cluster-reality shape:
+# an empty className (k3s Traefik ignores a named class — no IngressClass resource
+# exists) and no cert-manager (that stack isn't deployed). Opt IN to TLS by setting
+# clusterIssuer once cert-manager exists. Two shapes are supported:
+#   - Tailnet (sibling convention): className: "", host: artemis.tailscale, no TLS.
+#   - Traefik + cert-manager (LAN TLS): className: traefik, clusterIssuer, tlsSecretName.
 ingress:
   enabled: false
-  className: traefik
-  host: artemis-ui.homelab
-  # When set, cert-manager issues TLS into tlsSecretName; omit for a no-TLS (tailnet) ingress.
-  clusterIssuer: codex-ca
-  tlsSecretName: artemis-ui-tls
+  className: ""
+  host: artemis.tailscale
+  # Set to a cert-manager ClusterIssuer to add TLS; empty = a plain (no-TLS) ingress.
+  clusterIssuer: ""
+  tlsSecretName: ""
 
 # Run as an unprivileged container (the image already runs as uid 1001; Next.js
 # standalone writes nothing to disk at runtime).
