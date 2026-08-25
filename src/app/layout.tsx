@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { AppShell } from "@/components/shell/app-shell";
 
 export const metadata: Metadata = {
   title: {
@@ -21,9 +22,7 @@ export default function RootLayout({
     <html lang="en" className="dark" style={{ colorScheme: "dark" }}>
       <body className="min-h-screen bg-background text-foreground">
         <Providers>
-          <div className="flex min-h-screen flex-col">
-            <main className="flex-1">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>
