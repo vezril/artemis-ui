@@ -1,11 +1,20 @@
 import type { ArtemisClient } from "./client";
 import {
   ApiError,
+  type AutocompleteContext,
+  type DerivativeRef,
+  type Facets,
   type Health,
+  type Post,
+  type PostPage,
   type PostStatusResult,
+  type PostSummary,
   type PurgeOutcome,
+  type Rating,
   type ReprocessRequest,
   type ReprocessResult,
+  type SearchQuery,
+  type Suggestion,
   type SweepOutcome,
 } from "./types";
 
@@ -140,6 +149,161 @@ export function httpClient(baseUrl: string): ArtemisClient {
       }
       return o.purged;
     },
+
+    // --- catalog: read surface ---------------------------------------------
+
+    async searchPosts(query: SearchQuery): Promise<PostPage> {
+      const params = new URLSearchParams();
+      if (query.tags.trim()) params.set("tags", query.tags.trim());
+      if (query.order) params.set("order", query.order);
+      if (query.cursor) params.set("cursor", query.cursor);
+      params.set("limit", String(clampLimit(query.limit)));
+      const res = await fetch(url(`/posts?${params.toString()}`), { cache: "no-store" });
+      const body = await json<unknown>(res);
+      const o = body as { posts?: unknown; nextCursor?: unknown };
+      if (!Array.isArray(o?.posts)) {
+        throw new ApiError("unexpected /posts response (no posts array)", res.status);
+      }
+      // A non-empty string is the only valid cursor; absent / null / "" all end the list
+      // (an empty-string cursor would otherwise loop, re-fetching page 1 forever).
+      const nextCursor =
+        typeof o.nextCursor === "string" && o.nextCursor.length > 0 ? o.nextCursor : null;
+      return { posts: o.posts.map(toSummary), nextCursor };
+    },
+
+    async getPost(id: string): Promise<Post> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}`), { cache: "no-store" });
+      return toPost(await json<unknown>(res), res.status);
+    },
+
+    async facets(tags: string): Promise<Facets> {
+      const params = new URLSearchParams();
+      if (tags.trim()) params.set("tags", tags.trim());
+      const res = await fetch(url(`/posts/facets?${params.toString()}`), { cache: "no-store" });
+      const body = await json<unknown>(res);
+      const groups = (body as { facets?: unknown })?.facets;
+      if (!Array.isArray(groups)) {
+        throw new ApiError("unexpected /posts/facets response", res.status);
+      }
+      return {
+        facets: groups.map((g) => {
+          const row = g as { category?: unknown; tags?: unknown };
+          const tagList = Array.isArray(row.tags) ? row.tags : [];
+          return {
+            category: typeof row.category === "number" ? row.category : 0,
+            tags: tagList.map((t) => {
+              const tr = t as { name?: unknown; count?: unknown };
+              return {
+                name: typeof tr.name === "string" ? tr.name : "",
+                count: typeof tr.count === "number" ? tr.count : 0,
+              };
+            }),
+          };
+        }),
+      };
+    },
+
+    async autocomplete(q: string, context: AutocompleteContext): Promise<Suggestion[]> {
+      const params = new URLSearchParams({ q, context });
+      const res = await fetch(url(`/tags/autocomplete?${params.toString()}`), {
+        cache: "no-store",
+      });
+      const body = await json<unknown>(res);
+      if (!Array.isArray(body)) return [];
+      if (context === "metatag") {
+        // A bare string[] on the wire.
+        return body
+          .filter((v): v is string => typeof v === "string")
+          .map((value) => ({ kind: "metatag", value, label: value }));
+      }
+      // Tag context: snake_case rows { name, category, post_count, alias_of? }.
+      return body.map((row) => {
+        const r = row as {
+          name?: unknown;
+          category?: unknown;
+          post_count?: unknown;
+          alias_of?: unknown;
+        };
+        return {
+          kind: "tag",
+          name: typeof r.name === "string" ? r.name : "",
+          category: typeof r.category === "number" ? r.category : 0,
+          postCount: typeof r.post_count === "number" ? r.post_count : 0,
+          aliasOf: typeof r.alias_of === "string" ? r.alias_of : undefined,
+        };
+      });
+    },
+  };
+}
+
+/** Clamp a page size into the `[1, 200]` range Artemis accepts (default 40). */
+function clampLimit(limit: number | undefined): number {
+  if (typeof limit !== "number" || !Number.isFinite(limit)) return 40;
+  return Math.max(1, Math.min(200, Math.trunc(limit)));
+}
+
+const RATINGS = new Set<Rating>(["g", "s", "q", "e"]);
+function toRating(v: unknown): Rating | undefined {
+  return typeof v === "string" && RATINGS.has(v as Rating) ? (v as Rating) : undefined;
+}
+
+const num = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? v : undefined;
+const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+
+/** Normalize a `derivatives` array from a post body. */
+function toDerivatives(v: unknown): DerivativeRef[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((d) => {
+      const r = d as { kind?: unknown; variant?: unknown };
+      return { kind: str(r.kind) ?? "", variant: str(r.variant) ?? "" };
+    })
+    .filter((d) => d.variant !== "");
+}
+
+/** Map a raw `/posts` element into a `PostSummary`, tolerating missing fields. */
+function toSummary(raw: unknown): PostSummary {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: str(o.id) ?? "",
+    status: str(o.status) ?? "active",
+    tags: Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === "string") : [],
+    rating: toRating(o.rating),
+    score: num(o.score) ?? 0,
+    favCount: num(o.favCount) ?? 0,
+    width: num(o.width),
+    height: num(o.height),
+    duration: num(o.duration),
+    parent: str(o.parent),
+    duplicateOf: str(o.duplicateOf),
+    createdAt: str(o.createdAt) ?? "",
+    md5: str(o.md5),
+    derivatives: toDerivatives(o.derivatives),
+  };
+}
+
+/** Validate + map a `/posts/{id}` body into a `Post`, or throw a typed error. */
+function toPost(raw: unknown, status: number): Post {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  if (typeof o.id !== "string") {
+    throw new ApiError("unexpected /posts/{id} response", status);
+  }
+  return {
+    id: o.id,
+    status: str(o.status) ?? "active",
+    tags: Array.isArray(o.tags) ? o.tags.filter((t): t is string => typeof t === "string") : [],
+    rating: toRating(o.rating),
+    score: num(o.score) ?? 0,
+    favorited: o.favorited === true,
+    parent: str(o.parent),
+    source: str(o.source),
+    md5: str(o.md5),
+    filetype: str(o.filetype),
+    width: num(o.width),
+    height: num(o.height),
+    duration: num(o.duration),
+    derivatives: toDerivatives(o.derivatives),
   };
 }
 

@@ -80,6 +80,122 @@ export interface SweepOutcome {
   deleted: number;
 }
 
+// --- catalog (read surface) -------------------------------------------------
+//
+// These types are reconciled to the REAL Artemis contract (Muses was written
+// against a different assumed one): post ids are opaque **strings**; paging is
+// **keyset** (an opaque `nextCursor`, never a page number); a post carries its
+// `md5` plus `derivatives: [{kind, variant}]` from which media-gateway URLs are
+// built (`<base>/media/<md5>/<variant>`); and autocomplete tag rows arrive
+// **snake_case** (`post_count`, `alias_of`) while metatag context is a bare
+// string array. Tag categories are **numbers** on the wire (0 general, 1 artist,
+// 3 copyright, 4 character, 5 meta — see `@/lib/categories`).
+
+/** Four-tier content rating: general / sensitive / questionable / explicit. */
+export type Rating = "g" | "s" | "q" | "e";
+
+/** One Apollo-derived media reference; the URL is `<base>/media/<md5>/<variant>`. */
+export interface DerivativeRef {
+  /** e.g. `thumbnail`, `sample`, `transcode`, `original`. */
+  kind: string;
+  /** The stored variant filename, e.g. `thumb.webp`, `sample.webp`, `720p.mp4`. */
+  variant: string;
+}
+
+/** Lightweight post shape for gallery tiles (`GET /posts` → `posts[]`). */
+export interface PostSummary {
+  id: string;
+  status: string;
+  /** Bare tag names (categories are resolved separately via autocomplete/facets). */
+  tags: string[];
+  rating?: Rating;
+  score: number;
+  favCount: number;
+  width?: number;
+  height?: number;
+  /** Seconds, for video/animated media. */
+  duration?: number;
+  parent?: string;
+  duplicateOf?: string;
+  createdAt: string;
+  /** Media digest — the first path segment of a media-gateway URL. */
+  md5?: string;
+  /** Available Apollo derivatives (empty until processing completes). */
+  derivatives: DerivativeRef[];
+}
+
+/** Full post detail for the post view (`GET /posts/{id}`). */
+export interface Post {
+  id: string;
+  status: string;
+  tags: string[];
+  rating?: Rating;
+  score: number;
+  favorited: boolean;
+  parent?: string;
+  source?: string;
+  md5?: string;
+  filetype?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  derivatives: DerivativeRef[];
+}
+
+/** A page of results — pass `nextCursor` back as `?cursor=` (keyset). `null` ends. */
+export interface PostPage {
+  posts: PostSummary[];
+  nextCursor?: string | null;
+}
+
+/** DSL ordering options exposed by the search control. */
+export type OrderKey = "id" | "score" | "favcount" | "duration" | "random";
+
+export interface SearchQuery {
+  /** The raw DSL string, e.g. `1girl cat_ears -monochrome ~solo`. */
+  tags: string;
+  order?: OrderKey;
+  /** Opaque keyset cursor; kept stable-ordered across a sequence. */
+  cursor?: string | null;
+  /** Page size (default 40, clamped ≤ 200). */
+  limit?: number;
+}
+
+/** One category's tags-in-results bucket (`GET /posts/facets`). */
+export interface FacetGroup {
+  /** Category number (0 general, 1 artist, 3 copyright, 4 character, 5 meta). */
+  category: number;
+  tags: { name: string; count: number }[];
+}
+
+export interface Facets {
+  facets: FacetGroup[];
+}
+
+/** A tag suggestion (autocomplete in `tag` context; wire rows are snake_case). */
+export interface TagSuggestion {
+  kind: "tag";
+  name: string;
+  /** Category number (see `@/lib/categories`). */
+  category: number;
+  postCount: number;
+  /** Present when `name` is an alias antecedent resolving to another tag. */
+  aliasOf?: string;
+}
+
+/** A metatag suggestion (autocomplete in `metatag` context; wire is a bare string). */
+export interface MetatagSuggestion {
+  kind: "metatag";
+  /** The full token to insert, e.g. `rating:s`. */
+  value: string;
+  label: string;
+  description?: string;
+}
+
+export type Suggestion = TagSuggestion | MetatagSuggestion;
+
+export type AutocompleteContext = "tag" | "metatag";
+
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {
   constructor(

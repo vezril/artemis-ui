@@ -43,11 +43,11 @@ export const NAV: NavGroup[] = [
   {
     title: "Catalog",
     items: [
-      { label: "Search", href: "/search", icon: Search, comingSoon: true },
+      { label: "Search", href: "/search", icon: Search },
+      { label: "Gallery", href: "/search", icon: Images },
       { label: "Uploads", href: "/uploads", icon: Upload, comingSoon: true },
       { label: "Pools", href: "/pools", icon: FolderGit2, comingSoon: true },
       { label: "Review", href: "/review", icon: ListChecks, comingSoon: true },
-      { label: "Gallery", href: "/gallery", icon: Images, comingSoon: true },
     ],
   },
 ];

@@ -1,9 +1,15 @@
 import type {
+  AutocompleteContext,
+  Facets,
   Health,
+  Post,
+  PostPage,
   PostStatusResult,
   PurgeOutcome,
   ReprocessRequest,
   ReprocessResult,
+  SearchQuery,
+  Suggestion,
   SweepOutcome,
 } from "./types";
 
@@ -57,4 +63,27 @@ export interface ArtemisClient {
 
   /** `POST /admin/gc/purge-deleted` — run one retention purge pass now → count purged. */
   purgeDeleted(): Promise<number>;
+
+  // --- catalog: read surface -------------------------------------------------
+
+  /**
+   * `GET /posts?tags=&order=&cursor=&limit=` — keyset-paginated search. Pass the
+   * returned `nextCursor` back as `cursor` for the next page, keeping `order`
+   * fixed across the sequence. A `null`/absent `nextCursor` ends the list.
+   */
+  searchPosts(query: SearchQuery): Promise<PostPage>;
+
+  /** `GET /posts/{id}` (string id). Throws `ApiError(404)` for a missing/purged post. */
+  getPost(id: string): Promise<Post>;
+
+  /** `GET /posts/facets?tags=` — the tags present in a result set, grouped by category. */
+  facets(tags: string): Promise<Facets>;
+
+  /**
+   * `GET /tags/autocomplete?q=&context=` — completions for the term under the
+   * cursor. Tag context returns category-colored rows (snake_case on the wire);
+   * metatag context returns a bare completion list. Both are normalized to
+   * `Suggestion[]` so callers get one shape.
+   */
+  autocomplete(q: string, context: AutocompleteContext): Promise<Suggestion[]>;
 }
