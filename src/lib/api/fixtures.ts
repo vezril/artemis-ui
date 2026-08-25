@@ -25,42 +25,33 @@ import {
 function metricsSample(tick: number): string {
   const jitter = (base: number, amp: number) =>
     (base + amp * Math.sin(tick / 3) + amp * 0.3 * ((tick % 5) - 2)).toFixed(3);
-  return `# HELP jvm_memory_used_bytes The amount of used memory.
-# TYPE jvm_memory_used_bytes gauge
-jvm_memory_used_bytes{area="heap"} ${jitter(4.2e8, 3e7)}
-jvm_memory_used_bytes{area="nonheap"} ${jitter(1.1e8, 5e6)}
-# HELP jvm_threads_live_threads The current number of live threads.
-# TYPE jvm_threads_live_threads gauge
-jvm_threads_live_threads ${jitter(48, 4)}
-# HELP process_cpu_usage The "recent cpu usage" of the JVM process.
-# TYPE process_cpu_usage gauge
-process_cpu_usage ${jitter(0.18, 0.08)}
-# HELP http_server_requests_seconds Duration of HTTP server request handling.
-# TYPE http_server_requests_seconds summary
-http_server_requests_seconds_count{method="GET",status="200",uri="/posts"} ${Math.floor(
-    12000 + tick * 7,
-  )}
-http_server_requests_seconds_sum{method="GET",status="200",uri="/posts"} ${jitter(940, 20)}
-http_server_requests_seconds_count{method="POST",status="201",uri="/uploads"} ${Math.floor(
-    320 + tick,
-  )}
-# HELP artemis_projection_lag_events The read-model projection lag in events.
-# TYPE artemis_projection_lag_events gauge
-artemis_projection_lag_events{projection="posts"} ${Math.max(0, Math.round(+jitter(6, 6)))}
-artemis_projection_lag_events{projection="pools"} ${Math.max(0, Math.round(+jitter(2, 3)))}
-# HELP artemis_hermes_consumed_total Messages consumed from Hermes.
-# TYPE artemis_hermes_consumed_total counter
-artemis_hermes_consumed_total{subscription="media.processed"} ${Math.floor(8800 + tick * 3)}
-artemis_hermes_consumed_total{subscription="media.tags.suggested"} ${Math.floor(4100 + tick * 2)}
-# HELP artemis_hermes_published_total Messages published to Hermes.
-# TYPE artemis_hermes_published_total counter
-artemis_hermes_published_total{topic="media.process"} ${Math.floor(5200 + tick)}
-# HELP artemis_posts_active Number of active posts (from the projection).
-# TYPE artemis_posts_active gauge
-artemis_posts_active ${Math.floor(15230 + tick)}
-# HELP artemis_review_queue_depth Posts awaiting auto-tag review.
-# TYPE artemis_review_queue_depth gauge
-artemis_review_queue_depth ${Math.max(0, Math.round(+jitter(37, 20)))}
+  // Uses Artemis's REAL metric names (Prometheus JVM client + its artemis_* counters), so the
+  // curated cards render the same signals in fixtures and against the live service.
+  return `# HELP artemis_ready Whether the service is ready (1) or not (0).
+# TYPE artemis_ready gauge
+artemis_ready 1
+# HELP jvm_memory_bytes_used Used bytes of a given JVM memory area.
+# TYPE jvm_memory_bytes_used gauge
+jvm_memory_bytes_used{area="heap"} ${jitter(4.2e8, 3e7)}
+jvm_memory_bytes_used{area="nonheap"} ${jitter(1.1e8, 5e6)}
+# HELP process_resident_memory_bytes Resident memory size in bytes.
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes ${jitter(6.1e8, 2e7)}
+# HELP jvm_threads_current Current thread count of a JVM.
+# TYPE jvm_threads_current gauge
+jvm_threads_current ${jitter(48, 4)}
+# HELP process_open_fds Number of open file descriptors.
+# TYPE process_open_fds gauge
+process_open_fds ${Math.round(+jitter(120, 12))}
+# HELP artemis_consume_messages_applied_total Media-result messages successfully handled and acked by the consume loop.
+# TYPE artemis_consume_messages_applied_total counter
+artemis_consume_messages_applied_total ${Math.floor(8800 + tick * 3)}
+# HELP artemis_consume_polls_total Consume-loop poll cycles.
+# TYPE artemis_consume_polls_total counter
+artemis_consume_polls_total ${Math.floor(12000 + tick * 7)}
+# HELP artemis_consume_poll_failures_total Consume-loop poll failures.
+# TYPE artemis_consume_poll_failures_total counter
+artemis_consume_poll_failures_total ${Math.floor(3 + tick * 0.02)}
 `;
 }
 
