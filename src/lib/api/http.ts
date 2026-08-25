@@ -1,5 +1,13 @@
 import type { ArtemisClient } from "./client";
-import { ApiError, type Health, type ReprocessRequest, type ReprocessResult } from "./types";
+import {
+  ApiError,
+  type Health,
+  type PostStatusResult,
+  type PurgeOutcome,
+  type ReprocessRequest,
+  type ReprocessResult,
+  type SweepOutcome,
+} from "./types";
 
 /**
  * The live Artemis HTTP client. Talks REST/JSON to the base URL from
@@ -87,7 +95,61 @@ export function httpClient(baseUrl: string): ArtemisClient {
         return null;
       }
     },
+
+    async deletePost(id: string): Promise<PostStatusResult> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}`), { method: "DELETE" });
+      return statusResult(await json<unknown>(res), res.status);
+    },
+
+    async restorePost(id: string): Promise<PostStatusResult> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/restore`), { method: "POST" });
+      return statusResult(await json<unknown>(res), res.status);
+    },
+
+    async purgePost(id: string): Promise<PurgeOutcome> {
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/purge`), { method: "POST" });
+      const o = (await json<unknown>(res)) as { purged?: unknown; blobsDeleted?: unknown };
+      if (typeof o?.purged !== "boolean" || typeof o?.blobsDeleted !== "number") {
+        throw new ApiError("unexpected /purge response", res.status);
+      }
+      return { purged: o.purged, blobsDeleted: o.blobsDeleted };
+    },
+
+    async orphanSweep(dryRun: boolean): Promise<SweepOutcome> {
+      const res = await fetch(url("/admin/gc/orphan-sweep"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      });
+      const o = (await json<unknown>(res)) as {
+        scanned?: unknown;
+        orphans?: unknown;
+        deleted?: unknown;
+      };
+      if (![o?.scanned, o?.orphans, o?.deleted].every((v) => Number.isFinite(v))) {
+        throw new ApiError("unexpected /orphan-sweep response", res.status);
+      }
+      return { scanned: o.scanned as number, orphans: o.orphans as number, deleted: o.deleted as number };
+    },
+
+    async purgeDeleted(): Promise<number> {
+      const res = await fetch(url("/admin/gc/purge-deleted"), { method: "POST" });
+      const o = (await json<unknown>(res)) as { purged?: unknown };
+      if (typeof o?.purged !== "number") {
+        throw new ApiError("unexpected /purge-deleted response", res.status);
+      }
+      return o.purged;
+    },
   };
+}
+
+/** Validate a `{id, status}` admin-deletion response, or throw a typed error. */
+function statusResult(body: unknown, status: number): PostStatusResult {
+  const o = body as { id?: unknown; status?: unknown };
+  if (typeof o?.id !== "string" || typeof o?.status !== "string") {
+    throw new ApiError("unexpected response shape", status);
+  }
+  return { id: o.id, status: o.status };
 }
 
 /** Normalize an arbitrary /health body into a `Health`, deriving status from the code. */

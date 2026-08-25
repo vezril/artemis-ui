@@ -9,8 +9,12 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  // Use React's automatic JSX runtime so component tests need no `import React`.
+  esbuild: { jsx: "automatic" },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    // Default to node (the parser test); component tests opt into jsdom via a
+    // `// @vitest-environment jsdom` docblock.
     environment: "node",
   },
 });

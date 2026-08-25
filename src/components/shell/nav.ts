@@ -1,4 +1,15 @@
-import { Activity, FolderGit2, Gauge, Images, ListChecks, RefreshCw, Search, Upload } from "lucide-react";
+import {
+  Activity,
+  FolderGit2,
+  Gauge,
+  Images,
+  ListChecks,
+  RefreshCw,
+  Search,
+  Trash2,
+  Upload,
+  Wrench,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -25,6 +36,8 @@ export const NAV: NavGroup[] = [
       { label: "Health", href: "/health", icon: Activity },
       { label: "Metrics", href: "/metrics", icon: Gauge },
       { label: "Reprocess", href: "/reprocess", icon: RefreshCw },
+      { label: "Posts", href: "/maintenance/posts", icon: Wrench },
+      { label: "Garbage collection", href: "/maintenance/gc", icon: Trash2 },
     ],
   },
   {
