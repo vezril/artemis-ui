@@ -80,6 +80,18 @@ export interface SweepOutcome {
   deleted: number;
 }
 
+/**
+ * `POST /uploads` result. Artemis answers `201 {postId, status:"pending"}` after
+ * accepting the raw file bytes; the post then progresses `pending → active | failed`
+ * asynchronously (followed via `GET /posts/{id}`). `status` keeps an open escape
+ * hatch so an unknown server status still type-checks.
+ */
+export interface UploadResult {
+  postId: string;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  status: "pending" | (string & {});
+}
+
 // --- catalog (read surface) -------------------------------------------------
 //
 // These types are reconciled to the REAL Artemis contract (Muses was written
@@ -195,6 +207,30 @@ export interface MetatagSuggestion {
 export type Suggestion = TagSuggestion | MetatagSuggestion;
 
 export type AutocompleteContext = "tag" | "metatag";
+
+// --- catalog: review queue --------------------------------------------------
+//
+// Argus posts tag SUGGESTIONS to Artemis, which queues them for human review
+// (suggestions are never auto-applied). A suggestion carries only a tag NAME (no
+// category — that's resolved client-side via `useTagCategories`, the same
+// autocomplete lookup the tag sidebar uses), plus a confidence and the source
+// model that produced it.
+
+/** One AI-suggested tag awaiting review (`GET /review` → `posts[].suggestions[]`). */
+export interface ReviewSuggestion {
+  /** The suggested tag name (bare; category resolved separately). */
+  tag: string;
+  /** Model confidence in `[0, 1]`. */
+  confidence: number;
+  /** The producing model, e.g. `wd-tagger`, `ram++`. */
+  source: string;
+}
+
+/** One post awaiting review, with its suggestions (`GET /review` → `posts[]`). */
+export interface ReviewItem {
+  postId: string;
+  suggestions: ReviewSuggestion[];
+}
 
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {

@@ -13,9 +13,12 @@ import {
   type Rating,
   type ReprocessRequest,
   type ReprocessResult,
+  type ReviewItem,
+  type ReviewSuggestion,
   type SearchQuery,
   type Suggestion,
   type SweepOutcome,
+  type UploadResult,
 } from "./types";
 
 /**
@@ -290,7 +293,90 @@ export function httpClient(baseUrl: string): ArtemisClient {
       });
       await expectOk(res);
     },
+
+    // --- catalog: upload ---------------------------------------------------
+
+    async upload(file: File, mediaType?: string): Promise<UploadResult> {
+      // The file's bytes ARE the request body (raw, not multipart). Content-Type
+      // carries the MIME type and `?mediaType=` its top-level class; both are
+      // derived from the File unless an explicit mediaType overrides. A `File` is a
+      // fully-sized Blob, so `fetch` sends it with a known length (no streaming/duplex).
+      const cls = mediaType ?? deriveMediaType(file);
+      const params = cls ? `?${new URLSearchParams({ mediaType: cls }).toString()}` : "";
+      const res = await fetch(url(`/uploads${params}`), {
+        method: "POST",
+        headers: { "content-type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const body = await json<unknown>(res);
+      const o = (body ?? {}) as { postId?: unknown; status?: unknown };
+      if (typeof o.postId !== "string" || typeof o.status !== "string") {
+        throw new ApiError("unexpected /uploads response (no postId/status)", res.status);
+      }
+      return { postId: o.postId, status: o.status };
+    },
+
+    // --- catalog: review queue ---------------------------------------------
+
+    async getReviewQueue(limit?: number): Promise<ReviewItem[]> {
+      const params = new URLSearchParams({ limit: String(clampReviewLimit(limit)) });
+      const res = await fetch(url(`/review?${params.toString()}`), { cache: "no-store" });
+      const body = await json<unknown>(res);
+      // The wire shape wraps the backlog in a top-level `posts` array.
+      const posts = (body as { posts?: unknown })?.posts;
+      if (!Array.isArray(posts)) {
+        throw new ApiError("unexpected /review response (no posts array)", res.status);
+      }
+      return posts.map(toReviewItem).filter((item): item is ReviewItem => item !== null);
+    },
+
+    async reviewPost(id: string, accept: string[]): Promise<void> {
+      // An empty (or absent) `accept` is reject-all; we always send the field for
+      // an unambiguous, idempotent-replace body.
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/review`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accept }),
+      });
+      await expectOk(res);
+    },
   };
+}
+
+/** Clamp the review page size into `[0, 200]` (default 50). */
+function clampReviewLimit(limit: number | undefined): number {
+  if (typeof limit !== "number" || !Number.isFinite(limit)) return 50;
+  return Math.max(0, Math.min(200, Math.trunc(limit)));
+}
+
+/** Map a raw `/review` element into a `ReviewItem`, or `null` if it has no id. */
+function toReviewItem(raw: unknown): ReviewItem | null {
+  const o = (raw ?? {}) as { postId?: unknown; suggestions?: unknown };
+  if (typeof o.postId !== "string" || o.postId === "") return null;
+  const suggestions = Array.isArray(o.suggestions)
+    ? o.suggestions
+        .map((s): ReviewSuggestion | null => {
+          const r = (s ?? {}) as { tag?: unknown; confidence?: unknown; source?: unknown };
+          if (typeof r.tag !== "string" || r.tag === "") return null;
+          return {
+            tag: r.tag,
+            confidence: num(r.confidence) ?? 0,
+            source: str(r.source) ?? "",
+          };
+        })
+        .filter((s): s is ReviewSuggestion => s !== null)
+    : [];
+  return { postId: o.postId, suggestions };
+}
+
+/**
+ * Derive the `?mediaType=` class from a File's MIME type: the top-level segment
+ * (`image`/`video`/…). An empty/typeless file yields `undefined` so the param is
+ * omitted and Artemis sniffs the class itself.
+ */
+function deriveMediaType(file: File): string | undefined {
+  const top = (file.type || "").split("/")[0];
+  return top || undefined;
 }
 
 /** Clamp a page size into the `[1, 200]` range Artemis accepts (default 40). */

@@ -9,9 +9,11 @@ import type {
   Rating,
   ReprocessRequest,
   ReprocessResult,
+  ReviewItem,
   SearchQuery,
   Suggestion,
   SweepOutcome,
+  UploadResult,
 } from "./types";
 
 /**
@@ -114,4 +116,39 @@ export interface ArtemisClient {
 
   /** `PATCH /posts/{id}/rating` with `{rating}` (g/s/q/e). Throws `ApiError` on non-2xx. */
   setRating(id: string, rating: Rating): Promise<void>;
+
+  // --- catalog: upload -------------------------------------------------------
+
+  /**
+   * `POST /uploads?mediaType=<class>` — streams the file's bytes as the **raw
+   * request body** (NOT multipart/form-data). The request `Content-Type` is the
+   * file's MIME type and `mediaType` is derived from it (the top-level type, e.g.
+   * `image`/`video`); an explicit `mediaType` overrides that derivation. Answers
+   * `201 {postId, status:"pending"}`; a post's ingest status is then followed by
+   * polling `getPost`. Throws `ApiError` on a 400 (empty body) / 502 (Apollo/Hermes
+   * down) / other non-2xx `{error}`.
+   */
+  upload(file: File, mediaType?: string): Promise<UploadResult>;
+
+  // --- catalog: review queue -------------------------------------------------
+  //
+  // Argus's tag suggestions are queued (never auto-applied); the human clears the
+  // backlog by accepting the right suggestions per post or rejecting all. There is
+  // no dedicated count endpoint — the needs-review count is the queue length.
+
+  /**
+   * `GET /review?limit=` → `{posts:[{postId, suggestions:[{tag, confidence,
+   * source}]}]}`. Returns the backlog of posts awaiting review (the top-level
+   * `posts` wrapper is unwrapped to `ReviewItem[]`). `limit` is optional (default
+   * 50, clamped `0..200`).
+   */
+  getReviewQueue(limit?: number): Promise<ReviewItem[]>;
+
+  /**
+   * `POST /posts/{id}/review` with `{accept}` — resolve one post. A non-empty
+   * `accept` applies exactly those tags; an **empty** `accept` (reject-all) applies
+   * nothing and clears the review. Either way the post leaves the queue. 200 with
+   * no body; throws `ApiError` on non-2xx.
+   */
+  reviewPost(id: string, accept: string[]): Promise<void>;
 }

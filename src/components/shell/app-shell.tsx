@@ -7,6 +7,7 @@ import { Telescope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV } from "./nav";
 import { ConnectionIndicator } from "./connection-indicator";
+import { ReviewNavBadge } from "./review-nav-badge";
 
 /**
  * The persistent console shell: a header (brand + connection indicator) and a left
@@ -73,6 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       >
                         <Icon className="size-4" aria-hidden="true" />
                         {item.label}
+                        {item.reviewBadge && <ReviewNavBadge />}
                       </Link>
                     </li>
                   );

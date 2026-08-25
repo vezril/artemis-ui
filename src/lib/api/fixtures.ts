@@ -13,10 +13,19 @@ import {
   type Rating,
   type ReprocessRequest,
   type ReprocessResult,
+  type ReviewItem,
   type SearchQuery,
   type Suggestion,
   type SweepOutcome,
+  type UploadResult,
 } from "./types";
+
+/**
+ * How many `getPost` polls a freshly-uploaded fixture post stays `pending` before
+ * it flips to `active`. Small enough that the lifecycle is demonstrable offline and
+ * deterministic for tests (each `getPost` is one poll).
+ */
+export const FIXTURE_UPLOAD_POLLS_TO_ACTIVE = 2;
 
 /**
  * A representative Prometheus exposition, shaped like Artemis's `/metrics`, so the
@@ -218,6 +227,51 @@ const FIXTURE_POSTS: PostSummary[] = [
 
 const FIXTURE_BY_ID = new Map(FIXTURE_POSTS.map((p) => [p.id, p]));
 
+// --- review-queue fixtures --------------------------------------------------
+//
+// A small backlog of posts awaiting review, each with a few Argus suggestions of
+// varied confidence and source. The postIds reference real fixture posts so a
+// card's link to `/posts/{id}` resolves, and most suggested tags are in the tag
+// vocab above so `useTagCategories` colors them (a couple are absent to exercise
+// the general-category fallback). The queue shrinks as posts are resolved.
+
+/** The seed review backlog. `fixtureClient()` copies this into mutable state. */
+const REVIEW_BACKLOG: ReviewItem[] = [
+  {
+    postId: "01J8A7",
+    suggestions: [
+      { tag: "cat_ears", confidence: 0.94, source: "wd-tagger" },
+      { tag: "long_hair", confidence: 0.88, source: "ram++" },
+      { tag: "night", confidence: 0.72, source: "wd-tagger" },
+      { tag: "weapon", confidence: 0.51, source: "ram++" },
+      { tag: "monochrome", confidence: 0.42, source: "ram++" },
+    ],
+  },
+  {
+    postId: "01J8A2",
+    suggestions: [
+      { tag: "raiden_shogun", confidence: 0.98, source: "wd-tagger" },
+      { tag: "genshin_impact", confidence: 0.95, source: "ram++" },
+      { tag: "solo", confidence: 0.9, source: "wd-tagger" },
+      { tag: "sword", confidence: 0.63, source: "wd-tagger" },
+    ],
+  },
+  {
+    postId: "01J8A1",
+    suggestions: [
+      { tag: "outdoors", confidence: 0.91, source: "wd-tagger" },
+      { tag: "sky", confidence: 0.85, source: "ram++" },
+      { tag: "smile", confidence: 0.6, source: "wd-tagger" },
+      { tag: "blue_sky", confidence: 0.47, source: "ram++" },
+    ],
+  },
+];
+
+/** Deep-copy a review item so callers never mutate the shared backlog. */
+function cloneReviewItem(item: ReviewItem): ReviewItem {
+  return { postId: item.postId, suggestions: item.suggestions.map((s) => ({ ...s })) };
+}
+
 /** A wildcard-aware tag matcher (`cat_*` / `*_ears`); exact otherwise. */
 function tagMatches(pattern: string, tag: string): boolean {
   if (pattern.includes("*")) {
@@ -315,8 +369,29 @@ export function fixtureClient(): ArtemisClient {
     posts.set(id, post);
     return post;
   }
+  // Uploaded-post lifecycle: an uploaded fixture post starts `pending` and flips to
+  // `active` after a few `getPost` polls, so the pending→active flow is demonstrable
+  // offline (and deterministic in tests — each getPost is one poll). Maps a post id to
+  // how many times it has been polled while pending.
+  const uploadPolls = new Map<string, number>();
+  let uploadSeq = 0;
+  /** Advance an uploaded post's lifecycle on each poll; flip pending→active at the threshold. */
+  function advanceUpload(post: Post): void {
+    if (!uploadPolls.has(post.id) || post.status !== "pending") return;
+    const polls = (uploadPolls.get(post.id) ?? 0) + 1;
+    uploadPolls.set(post.id, polls);
+    if (polls >= FIXTURE_UPLOAD_POLLS_TO_ACTIVE) {
+      post.status = "active";
+      // Processing completed → derivatives now exist (a sample joins the thumbnail).
+      post.derivatives =
+        post.filetype === "mp4" ? [...videoDerivatives] : [...imageDerivatives];
+    }
+  }
   // A fixture pool of orphan debris that a real sweep would clear.
   let orphans = 4;
+  // A mutable copy of the review backlog; resolving a post removes it so the queue
+  // shrinks (like the live service clearing a review).
+  let reviewQueue: ReviewItem[] = REVIEW_BACKLOG.map(cloneReviewItem);
   return {
     live: false,
     baseUrl: null,
@@ -394,9 +469,11 @@ export function fixtureClient(): ArtemisClient {
     async getPost(id: string): Promise<Post> {
       const post = livePost(id);
       if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      // An uploaded post advances its ingest lifecycle one step per poll.
+      advanceUpload(post);
       // Return a copy so callers never mutate the fixture store directly (only the
-      // write methods do); tags is copied too since it is an array.
-      return { ...post, tags: [...post.tags] };
+      // write methods do); tags/derivatives are copied too since they are arrays.
+      return { ...post, tags: [...post.tags], derivatives: [...post.derivatives] };
     },
 
     async facets(tags: string): Promise<Facets> {
@@ -478,6 +555,61 @@ export function fixtureClient(): ArtemisClient {
       const post = livePost(id);
       if (!post || statusOf(id) === "purged") throw new ApiError("post not found", 404);
       post.rating = rating;
+    },
+
+    // --- catalog: upload ---------------------------------------------------
+    //
+    // Create a NEW pending post in the same in-memory store the read/edit slices use
+    // (so a subsequent getPost finds it) and register it for the pending→active
+    // lifecycle. An empty file 400s, like the live service on an empty body.
+
+    async upload(file: File, mediaType?: string): Promise<UploadResult> {
+      if (file.size === 0) throw new ApiError("empty upload", 400);
+      uploadSeq += 1;
+      const seq = String(uploadSeq).padStart(4, "0");
+      const id = `upload-${seq}`;
+      const cls = mediaType ?? (file.type || "").split("/")[0];
+      const isVideo = cls === "video" || (file.type || "").startsWith("video");
+      const post: Post = {
+        id,
+        status: "pending",
+        tags: [],
+        score: 0,
+        favorited: false,
+        source: undefined,
+        md5: `upload${seq}`,
+        filetype: isVideo ? "mp4" : "png",
+        // A pending post already has a thumbnail derivative; more join once active.
+        derivatives: [{ kind: "thumbnail", variant: "thumb.webp" }],
+      };
+      posts.set(id, post);
+      uploadPolls.set(id, 0);
+      return { postId: id, status: "pending" };
+    },
+
+    // --- catalog: review queue ---------------------------------------------
+    //
+    // Return a deep copy of the current backlog (callers never mutate it). Resolving
+    // a post removes it from the queue — and, when accepting tags, applies them to
+    // the in-memory post so a subsequent getPost reflects the review (coherent with
+    // the read/edit slices). Reject-all applies nothing.
+
+    async getReviewQueue(limit?: number): Promise<ReviewItem[]> {
+      const max = Math.max(0, Math.min(200, limit ?? 50));
+      return reviewQueue.slice(0, max).map(cloneReviewItem);
+    },
+
+    async reviewPost(id: string, accept: string[]): Promise<void> {
+      reviewQueue = reviewQueue.filter((item) => item.postId !== id);
+      if (accept.length > 0) {
+        const post = livePost(id);
+        if (post) {
+          // Union the accepted suggestions onto the post's tags (dedup, order-stable).
+          const set = new Set(post.tags);
+          for (const tag of accept) set.add(tag);
+          post.tags = [...set];
+        }
+      }
     },
   };
 }

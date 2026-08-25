@@ -18,6 +18,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Not yet implemented — rendered disabled ("coming soon"). */
   comingSoon?: boolean;
+  /** Show a live needs-review count badge on this entry (from the queue length). */
+  reviewBadge?: boolean;
 }
 
 export interface NavGroup {
@@ -45,9 +47,9 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Search", href: "/search", icon: Search },
       { label: "Gallery", href: "/search", icon: Images },
-      { label: "Uploads", href: "/uploads", icon: Upload, comingSoon: true },
+      { label: "Uploads", href: "/uploads", icon: Upload },
       { label: "Pools", href: "/pools", icon: FolderGit2, comingSoon: true },
-      { label: "Review", href: "/review", icon: ListChecks, comingSoon: true },
+      { label: "Review", href: "/review", icon: ListChecks, reviewBadge: true },
     ],
   },
 ];
