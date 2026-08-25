@@ -1,4 +1,11 @@
-import type { Health, ReprocessRequest, ReprocessResult } from "./types";
+import type {
+  Health,
+  PostStatusResult,
+  PurgeOutcome,
+  ReprocessRequest,
+  ReprocessResult,
+  SweepOutcome,
+} from "./types";
 
 /**
  * The typed Artemis client interface the console depends on. Two implementations
@@ -31,4 +38,23 @@ export interface ArtemisClient {
    * Returns `null` when a count can't be determined (fixtures, or a non-DSL select).
    */
   previewSelectionCount(dsl: string): Promise<number | null>;
+
+  // --- admin: deletion lifecycle (destructive; the UI gates purge/delete behind a confirm) ---
+
+  /** `DELETE /posts/{id}` — soft-delete (hide, retain blobs). */
+  deletePost(id: string): Promise<PostStatusResult>;
+
+  /** `POST /posts/{id}/restore` — restore a soft-deleted post to active. */
+  restorePost(id: string): Promise<PostStatusResult>;
+
+  /** `POST /posts/{id}/purge` — permanently hard-purge a soft-deleted post. */
+  purgePost(id: string): Promise<PurgeOutcome>;
+
+  // --- admin: garbage collection ---
+
+  /** `POST /admin/gc/orphan-sweep` — sweep failed-upload debris; `dryRun` reports without deleting. */
+  orphanSweep(dryRun: boolean): Promise<SweepOutcome>;
+
+  /** `POST /admin/gc/purge-deleted` — run one retention purge pass now → count purged. */
+  purgeDeleted(): Promise<number>;
 }

@@ -1,5 +1,13 @@
 import type { ArtemisClient } from "./client";
-import { ApiError, type Health, type ReprocessRequest, type ReprocessResult } from "./types";
+import {
+  ApiError,
+  type Health,
+  type PostStatusResult,
+  type PurgeOutcome,
+  type ReprocessRequest,
+  type ReprocessResult,
+  type SweepOutcome,
+} from "./types";
 
 /**
  * A representative Prometheus exposition, shaped like Artemis's `/metrics`, so the
@@ -50,6 +58,13 @@ artemis_review_queue_depth ${Math.max(0, Math.round(+jitter(37, 20)))}
 
 export function fixtureClient(): ArtemisClient {
   let tick = 0;
+  // A tiny in-memory post-status map so delete → restore → purge produce believable transitions
+  // offline, including a terminal `purged` state (a purged post can't be re-purged/restored — the
+  // live endpoints would 404). Unknown ids behave like an active post.
+  const status = new Map<string, "active" | "deleted" | "purged">();
+  const statusOf = (id: string) => status.get(id) ?? "active";
+  // A fixture pool of orphan debris that a real sweep would clear.
+  let orphans = 4;
   return {
     live: false,
     baseUrl: null,
@@ -72,6 +87,45 @@ export function fixtureClient(): ArtemisClient {
     async previewSelectionCount(): Promise<number | null> {
       // Fixtures have no catalog to count against.
       return null;
+    },
+
+    async deletePost(id: string): Promise<PostStatusResult> {
+      if (statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      status.set(id, "deleted");
+      return { id, status: "deleted" };
+    },
+
+    async restorePost(id: string): Promise<PostStatusResult> {
+      if (statusOf(id) === "purged") throw new ApiError("post not found", 404);
+      status.set(id, "active");
+      return { id, status: "active" };
+    },
+
+    async purgePost(id: string): Promise<PurgeOutcome> {
+      if (statusOf(id) === "deleted") {
+        status.set(id, "purged"); // terminal — a re-purge is a no-op
+        return { purged: true, blobsDeleted: 3 };
+      }
+      return { purged: false, blobsDeleted: 0 };
+    },
+
+    async orphanSweep(dryRun: boolean): Promise<SweepOutcome> {
+      const scanned = 42;
+      const found = orphans;
+      if (!dryRun) orphans = 0; // a real sweep clears the debris
+      return { scanned, orphans: found, deleted: dryRun ? 0 : found };
+    },
+
+    async purgeDeleted(): Promise<number> {
+      // Purge the soft-deleted fixtures that are "past retention" (→ terminal purged).
+      let purged = 0;
+      for (const [id, s] of status) {
+        if (s === "deleted") {
+          status.set(id, "purged");
+          purged += 1;
+        }
+      }
+      return purged;
     },
   };
 }

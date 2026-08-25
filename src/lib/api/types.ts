@@ -57,6 +57,29 @@ export interface ReprocessResult {
   enqueued: number;
 }
 
+/**
+ * `DELETE /posts/{id}` and `POST /posts/{id}/restore` result. `status` is the known set with an
+ * open escape hatch so a new Artemis status still type-checks (while the known ones narrow).
+ */
+export interface PostStatusResult {
+  id: string;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  status: "active" | "deleted" | (string & {});
+}
+
+/** `POST /posts/{id}/purge` result. */
+export interface PurgeOutcome {
+  purged: boolean;
+  blobsDeleted: number;
+}
+
+/** `POST /admin/gc/orphan-sweep` result (`deleted` is 0 on a dry-run). */
+export interface SweepOutcome {
+  scanned: number;
+  orphans: number;
+  deleted: number;
+}
+
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {
   constructor(
