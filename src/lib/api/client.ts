@@ -12,6 +12,7 @@ import type {
   SearchQuery,
   Suggestion,
   SweepOutcome,
+  UploadResult,
 } from "./types";
 
 /**
@@ -114,4 +115,17 @@ export interface ArtemisClient {
 
   /** `PATCH /posts/{id}/rating` with `{rating}` (g/s/q/e). Throws `ApiError` on non-2xx. */
   setRating(id: string, rating: Rating): Promise<void>;
+
+  // --- catalog: upload -------------------------------------------------------
+
+  /**
+   * `POST /uploads?mediaType=<class>` — streams the file's bytes as the **raw
+   * request body** (NOT multipart/form-data). The request `Content-Type` is the
+   * file's MIME type and `mediaType` is derived from it (the top-level type, e.g.
+   * `image`/`video`); an explicit `mediaType` overrides that derivation. Answers
+   * `201 {postId, status:"pending"}`; a post's ingest status is then followed by
+   * polling `getPost`. Throws `ApiError` on a 400 (empty body) / 502 (Apollo/Hermes
+   * down) / other non-2xx `{error}`.
+   */
+  upload(file: File, mediaType?: string): Promise<UploadResult>;
 }

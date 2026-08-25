@@ -80,6 +80,18 @@ export interface SweepOutcome {
   deleted: number;
 }
 
+/**
+ * `POST /uploads` result. Artemis answers `201 {postId, status:"pending"}` after
+ * accepting the raw file bytes; the post then progresses `pending → active | failed`
+ * asynchronously (followed via `GET /posts/{id}`). `status` keeps an open escape
+ * hatch so an unknown server status still type-checks.
+ */
+export interface UploadResult {
+  postId: string;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  status: "pending" | (string & {});
+}
+
 // --- catalog (read surface) -------------------------------------------------
 //
 // These types are reconciled to the REAL Artemis contract (Muses was written
