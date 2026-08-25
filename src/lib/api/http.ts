@@ -16,6 +16,7 @@ import {
   type SearchQuery,
   type Suggestion,
   type SweepOutcome,
+  type UploadResult,
 } from "./types";
 
 /**
@@ -290,7 +291,39 @@ export function httpClient(baseUrl: string): ArtemisClient {
       });
       await expectOk(res);
     },
+
+    // --- catalog: upload ---------------------------------------------------
+
+    async upload(file: File, mediaType?: string): Promise<UploadResult> {
+      // The file's bytes ARE the request body (raw, not multipart). Content-Type
+      // carries the MIME type and `?mediaType=` its top-level class; both are
+      // derived from the File unless an explicit mediaType overrides. A `File` is a
+      // fully-sized Blob, so `fetch` sends it with a known length (no streaming/duplex).
+      const cls = mediaType ?? deriveMediaType(file);
+      const params = cls ? `?${new URLSearchParams({ mediaType: cls }).toString()}` : "";
+      const res = await fetch(url(`/uploads${params}`), {
+        method: "POST",
+        headers: { "content-type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const body = await json<unknown>(res);
+      const o = (body ?? {}) as { postId?: unknown; status?: unknown };
+      if (typeof o.postId !== "string" || typeof o.status !== "string") {
+        throw new ApiError("unexpected /uploads response (no postId/status)", res.status);
+      }
+      return { postId: o.postId, status: o.status };
+    },
   };
+}
+
+/**
+ * Derive the `?mediaType=` class from a File's MIME type: the top-level segment
+ * (`image`/`video`/…). An empty/typeless file yields `undefined` so the param is
+ * omitted and Artemis sniffs the class itself.
+ */
+function deriveMediaType(file: File): string | undefined {
+  const top = (file.type || "").split("/")[0];
+  return top || undefined;
 }
 
 /** Clamp a page size into the `[1, 200]` range Artemis accepts (default 40). */
