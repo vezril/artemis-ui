@@ -1,0 +1,33 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "artemis-ui.fullname" . }}
+  labels:
+    {{- include "artemis-ui.labels" . | nindent 4 }}
+  {{- if .Values.ingress.clusterIssuer }}
+  annotations:
+    # cert-manager issues + renews the TLS cert into .spec.tls[].secretName.
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+  {{- end }}
+spec:
+  # className may be "" (load-bearing) for the tailnet exposure pattern.
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- if .Values.ingress.clusterIssuer }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "artemis-ui.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

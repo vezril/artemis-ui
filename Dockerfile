@@ -14,6 +14,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* are inlined into the browser bundle at BUILD time (chart env is server-side only).
+# Default to the same-origin BFF proxy (/api/artemis) so the image is env-agnostic: the browser
+# calls this app's own origin and the server-side proxy forwards to ARTEMIS_UPSTREAM at runtime.
+ARG NEXT_PUBLIC_ARTEMIS_BASE_URL=/api/artemis
+ENV NEXT_PUBLIC_ARTEMIS_BASE_URL=$NEXT_PUBLIC_ARTEMIS_BASE_URL
 RUN npm run build
 
 # ---- runner: minimal runtime ----
