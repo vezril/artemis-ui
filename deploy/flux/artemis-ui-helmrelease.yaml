@@ -1,0 +1,43 @@
+# Reference Flux resources for Artemis UI — Codex hosts the canonical copies in
+# the codex repo under apps/artemis-ui. Sources the chart shipped in THIS repo
+# (deploy/charts/artemis-ui) via a Flux GitRepository named `artemis-ui`.
+#
+# The repo is PUBLIC (like hermes-ui/apollo-ui), so no secretRef is needed.
+# Bump `values.image.tag` to a released Docker Hub semver tag to roll out via git.
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: artemis-ui
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: https://github.com/vezril/artemis-ui
+  ref:
+    branch: main
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: artemis-ui
+  namespace: artemis-ui
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: deploy/charts/artemis-ui
+      sourceRef:
+        kind: GitRepository
+        name: artemis-ui
+        namespace: flux-system
+  values:
+    image:
+      repository: calvinference/artemisui
+      tag: 0.1.0
+    replicaCount: 2
+    # The SERVER-SIDE upstream the BFF proxy forwards to (browser talks only to
+    # /api/artemis/* on this app's origin). Artemis is live in ns `artemis`.
+    artemisUpstream: "http://artemis.artemis.svc.cluster.local:8080"
+    # Exposure off by default; turn on for tailnet/Traefik when wanted.
+    ingress:
+      enabled: false

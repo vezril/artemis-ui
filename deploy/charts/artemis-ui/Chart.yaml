@@ -1,0 +1,7 @@
+apiVersion: v2
+name: artemis-ui
+description: Artemis UI — the per-service management console for the Artemis catalog (ops + catalog), behind a same-origin BFF proxy to Artemis.
+type: application
+version: 0.1.0
+# Tracks the app's own version; overridden per release by the image tag in values.
+appVersion: "0.1.0"
