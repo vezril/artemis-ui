@@ -1,0 +1,100 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Muses is dark, image-forward, low-chrome — the media is the interface.
+ * Dark values live on :root so the app is dark by default; the .dark class
+ * (set on <html>) mirrors them so shadcn-style `dark:` variants also resolve.
+ */
+:root {
+  --background: oklch(0.16 0.006 285);
+  --foreground: oklch(0.92 0.004 285);
+  --card: oklch(0.19 0.006 285);
+  --card-foreground: oklch(0.92 0.004 285);
+  --popover: oklch(0.19 0.006 285);
+  --popover-foreground: oklch(0.92 0.004 285);
+  --primary: oklch(0.7 0.14 264);
+  --primary-foreground: oklch(0.16 0.006 285);
+  --secondary: oklch(0.26 0.008 285);
+  --secondary-foreground: oklch(0.92 0.004 285);
+  --muted: oklch(0.24 0.006 285);
+  --muted-foreground: oklch(0.62 0.006 285);
+  --accent: oklch(0.28 0.01 285);
+  --accent-foreground: oklch(0.95 0.004 285);
+  --destructive: oklch(0.58 0.2 25);
+  --destructive-foreground: oklch(0.98 0.004 285);
+  --border: oklch(0.28 0.008 285);
+  --input: oklch(0.28 0.008 285);
+  --ring: oklch(0.7 0.14 264);
+  --radius: 0.625rem;
+
+  /*
+   * Tag category palette — the one place color is loud. Always paired with a
+   * text label in the UI (never color-only) for accessibility.
+   *   general (grey) · artist (red) · copyright (purple) · character (green) · meta (orange)
+   */
+  --category-general: oklch(0.72 0.02 285);
+  --category-artist: oklch(0.68 0.2 20);
+  --category-copyright: oklch(0.68 0.2 300);
+  --category-character: oklch(0.72 0.18 150);
+  --category-meta: oklch(0.75 0.16 65);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-category-general: var(--category-general);
+  --color-category-artist: var(--category-artist);
+  --color-category-copyright: var(--category-copyright);
+  --color-category-character: var(--category-character);
+  --color-category-meta: var(--category-meta);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+.dark {
+  --background: oklch(0.16 0.006 285);
+  --foreground: oklch(0.92 0.004 285);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, low-chrome scrollbars that fade into the dark surfaces. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
