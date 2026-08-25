@@ -6,6 +6,7 @@ import type {
   PostPage,
   PostStatusResult,
   PurgeOutcome,
+  Rating,
   ReprocessRequest,
   ReprocessResult,
   SearchQuery,
@@ -86,4 +87,31 @@ export interface ArtemisClient {
    * `Suggestion[]` so callers get one shape.
    */
   autocomplete(q: string, context: AutocompleteContext): Promise<Suggestion[]>;
+
+  // --- catalog: write surface (post editing) ---------------------------------
+  //
+  // All four are unauthenticated 200-with-no-body mutations. The console applies
+  // them optimistically against the `["post", id]` query and reconciles by
+  // re-reading `GET /posts/{id}` (read-your-writes on the entity).
+
+  /**
+   * `PATCH /posts/{id}/tags` with `{tags}` — a **full-set replace**. Callers send
+   * the entire resulting tag set (not a diff). Throws `ApiError` on non-2xx.
+   */
+  patchTags(id: string, tags: string[]): Promise<void>;
+
+  /**
+   * `POST`/`DELETE /posts/{id}/favorite` — toggle by method (`favorite=true` →
+   * POST, `false` → DELETE). Throws `ApiError` on non-2xx.
+   */
+  setFavorite(id: string, favorite: boolean): Promise<void>;
+
+  /**
+   * `POST /posts/{id}/score` with `{delta}` — Artemis scores by **delta** (a vote
+   * of +1/-1), not an absolute set. Throws `ApiError` on non-2xx.
+   */
+  scorePost(id: string, delta: number): Promise<void>;
+
+  /** `PATCH /posts/{id}/rating` with `{rating}` (g/s/q/e). Throws `ApiError` on non-2xx. */
+  setRating(id: string, rating: Rating): Promise<void>;
 }
