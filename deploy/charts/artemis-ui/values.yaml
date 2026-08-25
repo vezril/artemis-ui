@@ -1,0 +1,53 @@
+# Default values for the Artemis UI chart.
+
+image:
+  # Docker Hub is the source of truth; the homelab pulls via the NAS
+  # pull-through cache. Published by release.yml as <DOCKERHUB_USERNAME>/artemisui.
+  repository: calvinference/artemisui
+  # Pin to a released semver tag in production (matches the release workflow).
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+# The in-cluster Artemis REST base URL the SERVER-SIDE BFF proxy forwards to.
+# The BROWSER only ever calls this app's own origin (/api/artemis/*, baked into the
+# image at build time); the pod proxies those to this upstream. This is a plain
+# server-side env — NOT NEXT_PUBLIC (that must be baked at build time, see Dockerfile).
+artemisUpstream: "http://artemis.artemis.svc.cluster.local:8080"
+
+service:
+  port: 80
+  targetPort: 3000
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+# Exposure is off by default (per-service UI convention: reach it via port-forward,
+# or turn on ingress/tailnet on request). Two shapes are supported:
+#   - Traefik + cert-manager (LAN TLS): className: traefik, host, clusterIssuer, tlsSecretName.
+#   - Tailnet (hermes-ui pattern): className: "" (load-bearing), host: artemis-ui.tailscale,
+#     omit clusterIssuer/tlsSecretName (no TLS). Codex wires the NodePort side.
+ingress:
+  enabled: false
+  className: traefik
+  host: artemis-ui.homelab
+  # When set, cert-manager issues TLS into tlsSecretName; omit for a no-TLS (tailnet) ingress.
+  clusterIssuer: codex-ca
+  tlsSecretName: artemis-ui-tls
+
+# Run as an unprivileged container (the image already runs as uid 1001; Next.js
+# standalone writes nothing to disk at runtime).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
