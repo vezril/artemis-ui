@@ -11,6 +11,8 @@ import type {
   ReprocessResult,
   ReviewItem,
   SearchQuery,
+  SimilarPost,
+  SimilarQuery,
   Suggestion,
   SweepOutcome,
   UploadResult,
@@ -81,6 +83,24 @@ export interface ArtemisClient {
 
   /** `GET /posts/facets?tags=` — the tags present in a result set, grouped by category. */
   facets(tags: string): Promise<Facets>;
+
+  // --- catalog: similarity (Tier-1 near-duplicate search) --------------------
+  //
+  // Ranked by perceptual-hash Hamming distance, closest first. Both return ids +
+  // distances only (never full posts), so callers hydrate matches via `getPost`.
+  // A post with no phash yet (still processing) resolves to an empty list.
+
+  /**
+   * `GET /posts/{id}/similar?threshold=&limit=` — near-duplicates of an existing
+   * post. Server defaults: threshold 10, limit 20 (both clamped server-side).
+   */
+  similarToPost(id: string, query?: SimilarQuery): Promise<SimilarPost[]>;
+
+  /**
+   * `GET /similar?phash=&threshold=&limit=` — reverse lookup from a supplied
+   * perceptual hash (no post required). Same ranking and defaults.
+   */
+  similarToPhash(phash: string, query?: SimilarQuery): Promise<SimilarPost[]>;
 
   /**
    * `GET /tags/autocomplete?q=&context=` — completions for the term under the

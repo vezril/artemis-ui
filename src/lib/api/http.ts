@@ -16,10 +16,41 @@ import {
   type ReviewItem,
   type ReviewSuggestion,
   type SearchQuery,
+  type SimilarPost,
+  type SimilarQuery,
   type Suggestion,
   type SweepOutcome,
   type UploadResult,
 } from "./types";
+
+/**
+ * Build the optional `?threshold=&limit=` tuning for a similarity request.
+ * Unset values are omitted entirely so the server applies its own defaults
+ * (threshold 10, limit 20) rather than us hard-coding them client-side.
+ */
+function similarParams(query?: SimilarQuery): string {
+  const params = new URLSearchParams();
+  if (query?.threshold != null) params.set("threshold", String(query.threshold));
+  if (query?.limit != null) params.set("limit", String(query.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+/**
+ * Unwrap `{similar:[{id, distance}]}`, defensively. Artemis returns matches
+ * closest-first and we preserve that order; a missing or non-array envelope
+ * yields an empty list rather than throwing (a post with no phash yet is a
+ * normal state, not an error).
+ */
+function parseSimilar(body: unknown): SimilarPost[] {
+  const rows = (body as { similar?: unknown })?.similar;
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((r) => {
+    const row = r as { id?: unknown; distance?: unknown };
+    if (typeof row.id !== "string") return [];
+    return [{ id: row.id, distance: typeof row.distance === "number" ? row.distance : 0 }];
+  });
+}
 
 /**
  * The live Artemis HTTP client. Talks REST/JSON to the base URL from
@@ -225,6 +256,22 @@ export function httpClient(baseUrl: string): ArtemisClient {
           };
         }),
       };
+    },
+
+    async similarToPost(id: string, query?: SimilarQuery): Promise<SimilarPost[]> {
+      const qs = similarParams(query);
+      const res = await fetch(url(`/posts/${encodeURIComponent(id)}/similar${qs}`), {
+        cache: "no-store",
+      });
+      return parseSimilar(await json<unknown>(res));
+    },
+
+    async similarToPhash(phash: string, query?: SimilarQuery): Promise<SimilarPost[]> {
+      const params = new URLSearchParams({ phash });
+      if (query?.threshold != null) params.set("threshold", String(query.threshold));
+      if (query?.limit != null) params.set("limit", String(query.limit));
+      const res = await fetch(url(`/similar?${params.toString()}`), { cache: "no-store" });
+      return parseSimilar(await json<unknown>(res));
     },
 
     async autocomplete(q: string, context: AutocompleteContext): Promise<Suggestion[]> {
