@@ -48,7 +48,7 @@ export const NAV: NavGroup[] = [
       { label: "Search", href: "/search", icon: Search },
       { label: "Gallery", href: "/search", icon: Images },
       { label: "Uploads", href: "/uploads", icon: Upload },
-      { label: "Pools", href: "/pools", icon: FolderGit2, comingSoon: true },
+      { label: "Pools", href: "/pools", icon: FolderGit2 },
       { label: "Review", href: "/review", icon: ListChecks, reviewBadge: true },
     ],
   },
