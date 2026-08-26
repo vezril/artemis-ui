@@ -9,6 +9,7 @@ import {
   type PoolDetail,
   type PoolListPage,
   type PostPage,
+  type SavedSearch,
   type PostStatusResult,
   type PostSummary,
   type PurgeOutcome,
@@ -424,6 +425,11 @@ export function fixtureClient(): ArtemisClient {
     { id: "empty-pool", name: "Empty pool", posts: [] },
   ];
   const poolById = (id: string) => pools.find((pl) => pl.id === id);
+  // Mutable seeded saved searches (single-user list, like the live entity).
+  const savedSearches: { name: string; query: string }[] = [
+    { name: "Cat girls", query: "1girl cat_ears" },
+    { name: "Best of night", query: "night order:score" },
+  ];
   return {
     live: false,
     baseUrl: null,
@@ -742,6 +748,35 @@ export function fixtureClient(): ArtemisClient {
         order.length === pl.posts.length && [...order].sort().join() === [...pl.posts].sort().join();
       if (!same) throw new ApiError("order must be a permutation of the membership", 400);
       pl.posts = [...order];
+    },
+
+    // --- saved searches --------------------------------------------------------
+
+    async listSavedSearches(): Promise<SavedSearch[]> {
+      return savedSearches.map((s0) => ({ ...s0 }));
+    },
+
+    async saveSearch(name: string, query: string): Promise<void> {
+      const trimmed = name.trim();
+      if (!trimmed || trimmed.length > 128) throw new ApiError("invalid search name", 400);
+      if (savedSearches.some((s0) => s0.name === trimmed)) {
+        throw new ApiError("a search with this name already exists", 409);
+      }
+      savedSearches.push({ name: trimmed, query });
+    },
+
+    async renameSavedSearch(from: string, to: string): Promise<void> {
+      const entry = savedSearches.find((s0) => s0.name === from);
+      if (!entry) throw new ApiError("saved search does not exist", 404);
+      const trimmed = to.trim();
+      if (!trimmed || trimmed.length > 128) throw new ApiError("invalid search name", 400);
+      entry.name = trimmed;
+    },
+
+    async deleteSavedSearch(name: string): Promise<void> {
+      const at = savedSearches.findIndex((s0) => s0.name === name);
+      if (at < 0) throw new ApiError("saved search does not exist", 404);
+      savedSearches.splice(at, 1);
     },
   };
 }

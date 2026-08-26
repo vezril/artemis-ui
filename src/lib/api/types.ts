@@ -285,6 +285,14 @@ export interface PoolDetail {
   posts: string[];
 }
 
+// --- saved searches ----------------------------------------------------------
+
+/** One saved search: a user-chosen name for a stored DSL query. */
+export interface SavedSearch {
+  name: string;
+  query: string;
+}
+
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {
   constructor(
