@@ -24,6 +24,9 @@ export function AddToPool({ postId }: { postId: string }) {
   const [added, setAdded] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
+  // KNOWN LIMITATION: only the fetched pages appear (first page unless the index
+  // view already paged further) — fine at realistic pool counts; a searchable
+  // picker is the fix if a catalog ever exceeds one page of pools.
   const options = pools.data?.pages.flatMap((p) => p.pools) ?? [];
 
   return (

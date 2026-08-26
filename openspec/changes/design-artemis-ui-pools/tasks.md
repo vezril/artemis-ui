@@ -62,7 +62,7 @@
 ## 6. Verification
 
 - [x] 6.1 Full gate: lint, typecheck, vitest, `next build`.
-- [ ] 6.2 Frontend-review subagent pass; apply should-fixes.
+- [x] 6.2 Frontend-review subagent pass; apply should-fixes.
 - [x] 6.3 Browser smoke on fixtures: index cards → create pool → open detail → add members →
   arrange (drag + keyboard) → remove → rename → delete → not-found route.
 - [x] 6.4 `openspec validate design-artemis-ui-pools --strict` clean.

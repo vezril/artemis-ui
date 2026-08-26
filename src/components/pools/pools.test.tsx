@@ -295,4 +295,22 @@ describe("AddToPool (post view action)", () => {
     await waitFor(() => expect(api.addPoolPost).toHaveBeenCalledWith("series-a", "pX"));
     expect(await screen.findByText(/added/i)).toBeTruthy();
   });
+
+  it("resets the Added confirmation when remounted for a different post (the key contract)", async () => {
+    // post-view keys <AddToPool key={post.id}> so navigation remounts it; simulate that.
+    const user = userEvent.setup();
+    const { rerender } = wrap(<AddToPool key="pX" postId="pX" />);
+
+    await user.click(screen.getByRole("button", { name: /add to pool/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /series a/i }));
+    expect(await screen.findByText(/added/i)).toBeTruthy();
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <AddToPool key="pY" postId="pY" />
+      </QueryClientProvider>,
+    );
+    // Fresh mount → no lingering "Added" from the previous post.
+    expect(screen.queryByText(/added/i)).toBeNull();
+  });
 });

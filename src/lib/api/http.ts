@@ -448,7 +448,15 @@ export function httpClient(baseUrl: string): ArtemisClient {
       }
       const nextCursor =
         typeof o.nextCursor === "string" && o.nextCursor.length > 0 ? o.nextCursor : null;
-      return { posts: o.posts.map(toSummary), nextCursor };
+      // Drop unparseable member rows (same degrade-not-throw stance as listPools) —
+      // toSummary never throws, but an id-less row would just pollute the join map.
+      return {
+        posts: o.posts.flatMap((raw) => {
+          const s = toSummary(raw);
+          return s.id ? [s] : [];
+        }),
+        nextCursor,
+      };
     },
 
     async createPool(id: string, name: string): Promise<void> {

@@ -98,6 +98,12 @@ export function usePoolMutations(id: string): PoolMutations {
     await qc.cancelQueries({ queryKey: poolKey(id) });
     return { previous: qc.getQueryData<PoolDetail>(poolKey(id)) };
   }
+  // NOTE: because onMutate runs eagerly while mutationFns are scope-serialized, a
+  // rollback restores the snapshot taken at ITS click time — which may clobber a
+  // later queued mutation's optimistic patch. That is visually self-healing (the
+  // later mutation's onSettled invalidation refetches truth), and add/remove
+  // payloads are single-id intents that replay safely; only reorder encodes a
+  // whole-order intent, which is why its mutationFn re-derives at run time.
   function rollback(_err: unknown, _vars: unknown, context: PoolMutationContext | undefined) {
     if (context?.previous) qc.setQueryData(poolKey(id), context.previous);
   }
@@ -112,7 +118,17 @@ export function usePoolMutations(id: string): PoolMutations {
 
   const reorder = useMutation<void, Error, string[], PoolMutationContext>({
     scope,
-    mutationFn: (order) => getClient().reorderPool(id, order),
+    // TanStack v5 scope semantics (verified against query-core): `onMutate` runs
+    // EAGERLY at mutate() time, while `mutationFn` is what the scope serializes.
+    // So the wire payload must NOT be the variables frozen at click time — a
+    // reorder queued behind a failing one would replay the failed move after its
+    // rollback. Re-deriving the permutation from the entity cache HERE is safe
+    // exactly because the scope guarantees every earlier mutation on this pool
+    // has fully settled (or rolled back) before this runs.
+    mutationFn: (order) => {
+      const current = qc.getQueryData<PoolDetail>(poolKey(id));
+      return getClient().reorderPool(id, current?.posts ?? order);
+    },
     async onMutate(order) {
       const ctx = await snapshot();
       patch((prev) => ({ ...prev, posts: [...order] }));
