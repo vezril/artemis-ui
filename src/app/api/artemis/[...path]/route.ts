@@ -6,8 +6,9 @@
  * `ARTEMIS_UPSTREAM` (e.g. `http://artemis.artemis.svc.cluster.local:8080`).
  *
  * It forwards method, query string, headers (notably `Range`, for media seeking), and the request
- * body, and streams the response back verbatim (status, headers, and the raw byte stream) — so JSON,
- * Prometheus text, and ranged binary media all pass through unchanged. Artemis's request-tracing
+ * body (buffered, with a known content-length — see the note at the fetch), and streams the
+ * response back verbatim (status, headers, and the raw byte stream) — so JSON, Prometheus text,
+ * and ranged binary media all pass through unchanged. Artemis's request-tracing
  * trust model is preserved: the HTTP edge still mints-and-ignores correlation ids as untrusted
  * ingress (the browser can't set one that survives).
  */
@@ -19,7 +20,17 @@ export const runtime = "nodejs";
 const UPSTREAM = (process.env.ARTEMIS_UPSTREAM ?? "http://localhost:8080").replace(/\/$/, "");
 
 // Hop-by-hop / connection-management headers must not be forwarded verbatim.
-const STRIP_REQUEST_HEADERS = ["host", "connection", "content-length", "transfer-encoding"];
+// `expect` is the load-bearing one: clients (curl among them) send
+// `Expect: 100-continue` for bodies over ~1MB, and undici's fetch REFUSES the
+// header outright (UND_ERR_NOT_SUPPORTED) — forwarding it made every >1MB
+// upload fail as a bogus 502 while small uploads sailed through.
+const STRIP_REQUEST_HEADERS = [
+  "host",
+  "connection",
+  "content-length",
+  "transfer-encoding",
+  "expect",
+];
 const STRIP_RESPONSE_HEADERS = ["connection", "transfer-encoding", "content-encoding"];
 
 async function proxy(
@@ -34,22 +45,43 @@ async function proxy(
   for (const h of STRIP_REQUEST_HEADERS) headers.delete(h);
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
+
+  // BUFFER request bodies rather than re-streaming them. Streaming (`req.body` +
+  // `duplex: "half"`) forwards uploads as chunked transfer-encoding with no
+  // content-length, which empirically failed for bodies over ~1MB (the upstream
+  // fetch rejected and every >1MB upload surfaced as a bogus "unreachable" 502,
+  // while small uploads passed). Buffering gives undici a known length, which
+  // real photos (3–10MB) handle fine and is a non-issue at this deployment's
+  // single-user scale. Response bodies still stream through untouched.
+  let body: ArrayBuffer | undefined;
+  if (hasBody) {
+    try {
+      body = await req.arrayBuffer();
+    } catch {
+      return new Response(JSON.stringify({ error: "could not read the request body" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
+  }
+
   let upstream: Response;
   try {
     upstream = await fetch(target, {
       method: req.method,
       headers,
-      body: hasBody ? req.body : undefined,
-      // Required by Node/undici to stream a request body.
-      ...(hasBody ? { duplex: "half" } : {}),
+      body,
       redirect: "manual",
       cache: "no-store",
-    } as RequestInit);
-  } catch {
-    return new Response(JSON.stringify({ error: "artemis upstream unreachable" }), {
-      status: 502,
-      headers: { "content-type": "application/json" },
     });
+  } catch (err) {
+    // Honest wording: the proxy's REQUEST failed — which includes but is not limited
+    // to Artemis being down. The cause is logged server-side for diagnosis.
+    console.error(`[bff] proxy request to ${target} failed:`, err);
+    return new Response(
+      JSON.stringify({ error: "proxy request to artemis failed — is Artemis reachable?" }),
+      { status: 502, headers: { "content-type": "application/json" } },
+    );
   }
 
   const respHeaders = new Headers(upstream.headers);
