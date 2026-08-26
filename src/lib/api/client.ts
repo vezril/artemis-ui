@@ -12,6 +12,7 @@ import type {
   ReprocessRequest,
   ReprocessResult,
   ReviewItem,
+  SavedSearch,
   SearchQuery,
   SimilarPost,
   SimilarQuery,
@@ -207,4 +208,23 @@ export interface ArtemisClient {
 
   /** `PUT /pools/{id}/order` with `{order}` — reorder; MUST be a full permutation. */
   reorderPool(id: string, order: string[]): Promise<void>;
+
+  // --- catalog: saved searches -----------------------------------------------
+  //
+  // A single-user, entity-backed (read-your-writes) list of named DSL queries.
+  // The UI RUNS a saved search by navigating the normal `/search?tags=` flow;
+  // the server's `/saved-searches/{name}/results` endpoint is deliberately not
+  // consumed here. Names go in path segments — always URL-encoded.
+
+  /** `GET /saved-searches` — the ordered list (unwraps `{searches}`). */
+  listSavedSearches(): Promise<SavedSearch[]>;
+
+  /** `POST /saved-searches` with `{name, query}` — save. Invalid/duplicate → `ApiError`. */
+  saveSearch(name: string, query: string): Promise<void>;
+
+  /** `PATCH /saved-searches/{from}` with `{name: to}` — rename. */
+  renameSavedSearch(from: string, to: string): Promise<void>;
+
+  /** `DELETE /saved-searches/{name}` — remove. */
+  deleteSavedSearch(name: string): Promise<void>;
 }

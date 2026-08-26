@@ -18,6 +18,7 @@ import {
   type PoolSummary,
   type ReviewItem,
   type ReviewSuggestion,
+  type SavedSearch,
   type SearchQuery,
   type SimilarPost,
   type SimilarQuery,
@@ -504,6 +505,46 @@ export function httpClient(baseUrl: string): ArtemisClient {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ order }),
+      });
+      await expectOk(res);
+    },
+
+    async listSavedSearches(): Promise<SavedSearch[]> {
+      const res = await fetch(url(`/saved-searches`), { cache: "no-store" });
+      const body = await json<unknown>(res);
+      const rows = (body as { searches?: unknown })?.searches;
+      if (!Array.isArray(rows)) {
+        throw new ApiError("unexpected /saved-searches response (no searches array)", res.status);
+      }
+      // Degrade-not-throw: drop malformed rows rather than killing the list.
+      return rows.flatMap((r): SavedSearch[] => {
+        const row = r as { name?: unknown; query?: unknown };
+        if (typeof row?.name !== "string" || typeof row?.query !== "string") return [];
+        return [{ name: row.name, query: row.query }];
+      });
+    },
+
+    async saveSearch(name: string, query: string): Promise<void> {
+      const res = await fetch(url(`/saved-searches`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, query }),
+      });
+      await expectOk(res);
+    },
+
+    async renameSavedSearch(from: string, to: string): Promise<void> {
+      const res = await fetch(url(`/saved-searches/${encodeURIComponent(from)}`), {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: to }),
+      });
+      await expectOk(res);
+    },
+
+    async deleteSavedSearch(name: string): Promise<void> {
+      const res = await fetch(url(`/saved-searches/${encodeURIComponent(name)}`), {
+        method: "DELETE",
       });
       await expectOk(res);
     },
