@@ -254,6 +254,37 @@ export interface SimilarQuery {
   limit?: number;
 }
 
+// --- pools (ordered collections) --------------------------------------------
+//
+// Danbooru-style ordered collections of posts. Browse reads are projection-backed
+// (Artemis v1.2.0): the list carries a hydrated cover summary per pool, and the
+// members read returns full PostSummary rows in pool order — both keyset-paged.
+// The entity read (`GET /pools/{id}`) is the read-your-writes ordered id list the
+// editor mutates against.
+
+/** One pool card (`GET /pools` → `pools[]`): id, name, visible member count, cover. */
+export interface PoolSummary {
+  id: string;
+  name: string;
+  /** Count over the VISIBLE (non-deleted) members — matches the gallery length. */
+  postCount: number;
+  /** The first visible member as a post summary, or null for an empty pool. */
+  cover: PostSummary | null;
+}
+
+/** A keyset page of pools. */
+export interface PoolListPage {
+  pools: PoolSummary[];
+  nextCursor?: string | null;
+}
+
+/** The entity read (`GET /pools/{id}`): name + the authoritative ordered member ids. */
+export interface PoolDetail {
+  id: string;
+  name: string;
+  posts: string[];
+}
+
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {
   constructor(

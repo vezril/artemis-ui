@@ -2,6 +2,8 @@ import type {
   AutocompleteContext,
   Facets,
   Health,
+  PoolDetail,
+  PoolListPage,
   Post,
   PostPage,
   PostStatusResult,
@@ -171,4 +173,38 @@ export interface ArtemisClient {
    * no body; throws `ApiError` on non-2xx.
    */
   reviewPost(id: string, accept: string[]): Promise<void>;
+
+  // --- catalog: pools (ordered collections) ----------------------------------
+  //
+  // Browse reads are projection-backed and never 404 (unknown pool → empty page);
+  // the entity read is read-your-writes and 404s when absent — it is the
+  // authoritative member order the editor mutates against. Writes are 200-with-
+  // no-body entity commands (`ApiError` on non-2xx; duplicate create is a 409).
+
+  /** `GET /pools?cursor=&limit=` — keyset page of pool cards (covers hydrated). */
+  listPools(cursor?: string | null): Promise<PoolListPage>;
+
+  /** `GET /pools/{id}` — entity read: name + ordered member ids. 404 → `ApiError`. */
+  getPool(id: string): Promise<PoolDetail>;
+
+  /** `GET /pools/{id}/posts?cursor=&limit=` — hydrated members in pool order (never 404s). */
+  poolPosts(id: string, cursor?: string | null): Promise<PostPage>;
+
+  /** `POST /pools` with `{id, name}` — create. Duplicate id → `ApiError` 409. */
+  createPool(id: string, name: string): Promise<void>;
+
+  /** `PATCH /pools/{id}` with `{name}` — rename. */
+  renamePool(id: string, name: string): Promise<void>;
+
+  /** `DELETE /pools/{id}` — delete the pool (membership rows go with it). */
+  deletePool(id: string): Promise<void>;
+
+  /** `POST /pools/{id}/posts` with `{postId}` — append a member (idempotent). */
+  addPoolPost(id: string, postId: string): Promise<void>;
+
+  /** `DELETE /pools/{id}/posts/{postId}` — remove a member. */
+  removePoolPost(id: string, postId: string): Promise<void>;
+
+  /** `PUT /pools/{id}/order` with `{order}` — reorder; MUST be a full permutation. */
+  reorderPool(id: string, order: string[]): Promise<void>;
 }

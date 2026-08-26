@@ -13,6 +13,9 @@ import {
   type Rating,
   type ReprocessRequest,
   type ReprocessResult,
+  type PoolDetail,
+  type PoolListPage,
+  type PoolSummary,
   type ReviewItem,
   type ReviewSuggestion,
   type SearchQuery,
@@ -387,6 +390,120 @@ export function httpClient(baseUrl: string): ArtemisClient {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ accept }),
+      });
+      await expectOk(res);
+    },
+
+    async listPools(cursor?: string | null): Promise<PoolListPage> {
+      const params = new URLSearchParams();
+      if (cursor) params.set("cursor", cursor);
+      const qs = params.toString();
+      const res = await fetch(url(`/pools${qs ? `?${qs}` : ""}`), { cache: "no-store" });
+      const body = await json<unknown>(res);
+      const o = body as { pools?: unknown; nextCursor?: unknown };
+      if (!Array.isArray(o?.pools)) {
+        throw new ApiError("unexpected /pools response (no pools array)", res.status);
+      }
+      const nextCursor =
+        typeof o.nextCursor === "string" && o.nextCursor.length > 0 ? o.nextCursor : null;
+      return {
+        pools: o.pools.flatMap((raw): PoolSummary[] => {
+          const r = raw as { id?: unknown; name?: unknown; postCount?: unknown; cover?: unknown };
+          if (typeof r?.id !== "string" || typeof r?.name !== "string") return [];
+          return [
+            {
+              id: r.id,
+              name: r.name,
+              postCount: typeof r.postCount === "number" ? r.postCount : 0,
+              cover: r.cover ? toSummary(r.cover) : null,
+            },
+          ];
+        }),
+        nextCursor,
+      };
+    },
+
+    async getPool(id: string): Promise<PoolDetail> {
+      const res = await fetch(url(`/pools/${encodeURIComponent(id)}`), { cache: "no-store" });
+      const body = await json<unknown>(res);
+      const o = body as { id?: unknown; name?: unknown; posts?: unknown };
+      if (typeof o?.id !== "string" || typeof o?.name !== "string" || !Array.isArray(o?.posts)) {
+        throw new ApiError("unexpected /pools/{id} response", res.status);
+      }
+      return { id: o.id, name: o.name, posts: o.posts.filter((p): p is string => typeof p === "string") };
+    },
+
+    async poolPosts(id: string, cursor?: string | null): Promise<PostPage> {
+      const params = new URLSearchParams();
+      if (cursor) params.set("cursor", cursor);
+      const qs = params.toString();
+      const res = await fetch(
+        url(`/pools/${encodeURIComponent(id)}/posts${qs ? `?${qs}` : ""}`),
+        { cache: "no-store" },
+      );
+      const body = await json<unknown>(res);
+      const o = body as { posts?: unknown; nextCursor?: unknown };
+      if (!Array.isArray(o?.posts)) {
+        throw new ApiError("unexpected /pools/{id}/posts response (no posts array)", res.status);
+      }
+      const nextCursor =
+        typeof o.nextCursor === "string" && o.nextCursor.length > 0 ? o.nextCursor : null;
+      // Drop unparseable member rows (same degrade-not-throw stance as listPools) —
+      // toSummary never throws, but an id-less row would just pollute the join map.
+      return {
+        posts: o.posts.flatMap((raw) => {
+          const s = toSummary(raw);
+          return s.id ? [s] : [];
+        }),
+        nextCursor,
+      };
+    },
+
+    async createPool(id: string, name: string): Promise<void> {
+      const res = await fetch(url(`/pools`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, name }),
+      });
+      await expectOk(res);
+    },
+
+    async renamePool(id: string, name: string): Promise<void> {
+      const res = await fetch(url(`/pools/${encodeURIComponent(id)}`), {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      await expectOk(res);
+    },
+
+    async deletePool(id: string): Promise<void> {
+      const res = await fetch(url(`/pools/${encodeURIComponent(id)}`), { method: "DELETE" });
+      await expectOk(res);
+    },
+
+    async addPoolPost(id: string, postId: string): Promise<void> {
+      const res = await fetch(url(`/pools/${encodeURIComponent(id)}/posts`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ postId }),
+      });
+      await expectOk(res);
+    },
+
+    async removePoolPost(id: string, postId: string): Promise<void> {
+      const res = await fetch(
+        url(`/pools/${encodeURIComponent(id)}/posts/${encodeURIComponent(postId)}`),
+        { method: "DELETE" },
+      );
+      await expectOk(res);
+    },
+
+    async reorderPool(id: string, order: string[]): Promise<void> {
+      const res = await fetch(url(`/pools/${encodeURIComponent(id)}/order`), {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ order }),
       });
       await expectOk(res);
     },
