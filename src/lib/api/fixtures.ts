@@ -6,6 +6,8 @@ import {
   type Facets,
   type Health,
   type Post,
+  type PoolDetail,
+  type PoolListPage,
   type PostPage,
   type PostStatusResult,
   type PostSummary,
@@ -15,6 +17,8 @@ import {
   type ReprocessResult,
   type ReviewItem,
   type SearchQuery,
+  type SimilarPost,
+  type SimilarQuery,
   type Suggestion,
   type SweepOutcome,
   type UploadResult,
@@ -313,6 +317,26 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
+/**
+ * Offline stand-in for Artemis's Hamming ranking. There is no real perceptual hash
+ * in fixture mode, so a deterministic hash of the (target, candidate) pair stands in
+ * for the distance — which is enough to exercise the UI's ordering, thresholding,
+ * and limiting. Mirrors the live contract: the target is never its own match, and
+ * results come back closest-first, within `threshold` (default 10), capped at
+ * `limit` (default 20).
+ */
+function rankSimilar(target: string, query?: SimilarQuery): SimilarPost[] {
+  const threshold = query?.threshold ?? 10;
+  const limit = query?.limit ?? 20;
+  // Only visible (active) posts can match — a soft-deleted fixture post is hidden
+  // from search, so it must not resurface as a "similar" result either.
+  return FIXTURE_POSTS.filter((p) => p.id !== target && p.status === "active")
+    .map((p) => ({ id: p.id, distance: hash(`${target}:${p.id}`) % 16 }))
+    .filter((m) => m.distance <= threshold)
+    .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id))
+    .slice(0, Math.max(0, limit));
+}
+
 function sortPosts(posts: PostSummary[], order: SearchQuery["order"]): PostSummary[] {
   const sorted = [...posts];
   switch (order) {
@@ -392,6 +416,14 @@ export function fixtureClient(): ArtemisClient {
   // A mutable copy of the review backlog; resolving a post removes it so the queue
   // shrinks (like the live service clearing a review).
   let reviewQueue: ReviewItem[] = REVIEW_BACKLOG.map(cloneReviewItem);
+  // Mutable fixture pools over the fixture posts: one ordered multi-member pool and
+  // one empty, so the index, gallery, arrange mode, and empty state are all
+  // demonstrable offline. Every write mutates this array like the live service would.
+  const pools: { id: string; name: string; posts: string[] }[] = [
+    { id: "sunset-set", name: "Sunset set", posts: ["01J8A0", "01J8A2", "01J8A1"] },
+    { id: "empty-pool", name: "Empty pool", posts: [] },
+  ];
+  const poolById = (id: string) => pools.find((pl) => pl.id === id);
   return {
     live: false,
     baseUrl: null,
@@ -474,6 +506,16 @@ export function fixtureClient(): ArtemisClient {
       // Return a copy so callers never mutate the fixture store directly (only the
       // write methods do); tags/derivatives are copied too since they are arrays.
       return { ...post, tags: [...post.tags], derivatives: [...post.derivatives] };
+    },
+
+    async similarToPost(id: string, query?: SimilarQuery): Promise<SimilarPost[]> {
+      return rankSimilar(id, query);
+    },
+
+    async similarToPhash(phash: string, query?: SimilarQuery): Promise<SimilarPost[]> {
+      // Offline there is no real phash index; treat the hash as an opaque seed so
+      // reverse lookup is deterministic and demonstrable without a live Artemis.
+      return rankSimilar(phash, query);
     },
 
     async facets(tags: string): Promise<Facets> {
@@ -610,6 +652,96 @@ export function fixtureClient(): ArtemisClient {
           post.tags = [...set];
         }
       }
+    },
+
+    // --- pools -----------------------------------------------------------------
+    // Mirrors the live contract: list is name-ordered with a hydrated first-visible
+    // cover; the members read hydrates in pool order and hides non-active posts;
+    // the entity read 404s when absent; create 409s on a duplicate id; add is
+    // idempotent; reorder must be a full permutation.
+
+    async listPools(cursor?: string | null): Promise<PoolListPage> {
+      const ordered = [...pools].sort(
+        (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id.localeCompare(b.id),
+      );
+      const pageSize = 40;
+      const start = cursor ? Math.max(0, Number.parseInt(cursor, 10) || 0) : 0;
+      const page = ordered.slice(start, start + pageSize);
+      return {
+        pools: page.map((pl) => {
+          const visible = pl.posts
+            .map((pid) => FIXTURE_BY_ID.get(pid))
+            .filter((sm): sm is PostSummary => !!sm && sm.status === "active");
+          return {
+            id: pl.id,
+            name: pl.name,
+            postCount: visible.length,
+            cover: visible[0] ? { ...visible[0] } : null,
+          };
+        }),
+        nextCursor: start + pageSize < ordered.length ? String(start + pageSize) : null,
+      };
+    },
+
+    async getPool(id: string): Promise<PoolDetail> {
+      const pl = poolById(id);
+      if (!pl) throw new ApiError("pool not found", 404);
+      return { id: pl.id, name: pl.name, posts: [...pl.posts] };
+    },
+
+    async poolPosts(id: string, cursor?: string | null): Promise<PostPage> {
+      const pl = poolById(id);
+      // The live members read never 404s — an unknown pool is an empty page.
+      const members = (pl?.posts ?? [])
+        .map((pid) => FIXTURE_BY_ID.get(pid))
+        .filter((sm): sm is PostSummary => !!sm && sm.status === "active");
+      const pageSize = 40;
+      const start = cursor ? Math.max(0, Number.parseInt(cursor, 10) || 0) : 0;
+      return {
+        posts: members.slice(start, start + pageSize).map((sm) => ({ ...sm })),
+        nextCursor: start + pageSize < members.length ? String(start + pageSize) : null,
+      };
+    },
+
+    async createPool(id: string, name: string): Promise<void> {
+      if (!id.trim()) throw new ApiError("invalid pool id", 400);
+      if (poolById(id)) throw new ApiError("pool already exists", 409);
+      pools.push({ id, name, posts: [] });
+    },
+
+    async renamePool(id: string, name: string): Promise<void> {
+      const pl = poolById(id);
+      if (!pl) throw new ApiError("pool not found", 404);
+      pl.name = name;
+    },
+
+    async deletePool(id: string): Promise<void> {
+      const at = pools.findIndex((pl) => pl.id === id);
+      if (at < 0) throw new ApiError("pool not found", 404);
+      pools.splice(at, 1);
+    },
+
+    async addPoolPost(id: string, postId: string): Promise<void> {
+      const pl = poolById(id);
+      if (!pl) throw new ApiError("pool not found", 404);
+      if (!pl.posts.includes(postId)) pl.posts.push(postId); // idempotent append
+    },
+
+    async removePoolPost(id: string, postId: string): Promise<void> {
+      const pl = poolById(id);
+      if (!pl) throw new ApiError("pool not found", 404);
+      const at = pl.posts.indexOf(postId);
+      if (at < 0) throw new ApiError("post not in pool", 400);
+      pl.posts.splice(at, 1);
+    },
+
+    async reorderPool(id: string, order: string[]): Promise<void> {
+      const pl = poolById(id);
+      if (!pl) throw new ApiError("pool not found", 404);
+      const same =
+        order.length === pl.posts.length && [...order].sort().join() === [...pl.posts].sort().join();
+      if (!same) throw new ApiError("order must be a permutation of the membership", 400);
+      pl.posts = [...order];
     },
   };
 }

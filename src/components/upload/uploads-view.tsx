@@ -9,8 +9,8 @@ import { UploadRow } from "./upload-row";
 /**
  * The Uploads view: drop or pick image/video files, stream each to `POST /uploads`,
  * and follow each post's ingest status live. Status is honest — a `pending` post is
- * shown as pending (never a fabricated processing bar), and on a cluster without the
- * media processor deployed a post can stay pending indefinitely (a note says so).
+ * shown as pending (never a fabricated processing bar) until the media processor
+ * (Hephaestus) records its derivatives, typically within seconds.
  */
 export function UploadsView() {
   const { rows, addFiles, retry, reportStatus } = useUploads();
@@ -29,8 +29,8 @@ export function UploadsView() {
         <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         <span>
           A post stays <b>pending</b> until the media processor (Hephaestus) records its
-          derivatives. On a cluster without the processor deployed, uploads remain pending — that is
-          expected, not an error.
+          derivatives — typically a few seconds. A post stuck pending usually means processing is
+          backed up or the processor is down.
         </span>
       </p>
 

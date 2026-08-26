@@ -232,6 +232,59 @@ export interface ReviewItem {
   suggestions: ReviewSuggestion[];
 }
 
+// --- similarity (Tier-1 near-duplicate search) ------------------------------
+//
+// Hephaestus computes a perceptual hash per media; Artemis stores it and ranks
+// near-duplicates by Hamming distance. Both endpoints answer `{similar:[...]}`
+// with matches **closest first** — ids and distances only, so the UI hydrates
+// each match through the normal post read path.
+
+/** One near-duplicate match: a post id and its perceptual-hash Hamming distance. */
+export interface SimilarPost {
+  id: string;
+  /** Hamming distance from the target phash — lower is more similar (0 = identical hash). */
+  distance: number;
+}
+
+/** Optional tuning for a similarity query (server defaults: threshold 10, limit 20). */
+export interface SimilarQuery {
+  /** Max Hamming distance to include. Server clamps; default 10. */
+  threshold?: number;
+  /** Max matches to return. Server clamps; default 20. */
+  limit?: number;
+}
+
+// --- pools (ordered collections) --------------------------------------------
+//
+// Danbooru-style ordered collections of posts. Browse reads are projection-backed
+// (Artemis v1.2.0): the list carries a hydrated cover summary per pool, and the
+// members read returns full PostSummary rows in pool order — both keyset-paged.
+// The entity read (`GET /pools/{id}`) is the read-your-writes ordered id list the
+// editor mutates against.
+
+/** One pool card (`GET /pools` → `pools[]`): id, name, visible member count, cover. */
+export interface PoolSummary {
+  id: string;
+  name: string;
+  /** Count over the VISIBLE (non-deleted) members — matches the gallery length. */
+  postCount: number;
+  /** The first visible member as a post summary, or null for an empty pool. */
+  cover: PostSummary | null;
+}
+
+/** A keyset page of pools. */
+export interface PoolListPage {
+  pools: PoolSummary[];
+  nextCursor?: string | null;
+}
+
+/** The entity read (`GET /pools/{id}`): name + the authoritative ordered member ids. */
+export interface PoolDetail {
+  id: string;
+  name: string;
+  posts: string[];
+}
+
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {
   constructor(

@@ -9,6 +9,8 @@ import { formatDuration } from "@/lib/catalog/format";
 import { usePost } from "@/lib/hooks/use-catalog";
 import { MediaView } from "@/components/catalog/media-view";
 import { PostActions } from "@/components/catalog/post-actions";
+import { SimilarPosts } from "@/components/catalog/similar-posts";
+import { AddToPool } from "@/components/pools/add-to-pool";
 import { TagSidebar } from "@/components/catalog/tag-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -63,8 +65,15 @@ export function PostView({ id }: { id: string }) {
         ) : (
           <>
             <PostActions post={post} />
+            {/* Keyed by post id (like SimilarPosts below) so the "Added" confirmation
+                resets on navigation instead of falsely persisting onto the next post. */}
+            <AddToPool key={post.id} postId={post.id} />
             <TagSidebar post={post} />
             <PostMetadata post={post} />
+            {/* Keyed by post id so the panel's "deferred" state resets on navigation — without
+                this, one "Find similar" click would auto-fire the query on every post visited
+                afterwards (the component re-renders in place, it doesn't remount). */}
+            <SimilarPosts key={post.id} post={post} />
           </>
         )}
       </aside>
