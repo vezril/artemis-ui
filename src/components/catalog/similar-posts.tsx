@@ -10,18 +10,19 @@ import { mediaUrl, thumbnailVariant } from "@/lib/api/media";
 import { type SimilarMatch, useSimilarPosts } from "@/lib/hooks/use-similar";
 import { MediaPlaceholder } from "@/components/catalog/media-placeholder";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 /**
  * How a Hamming distance reads to a human. Hephaestus's phash + Artemis's default
  * `DEDUP_HAMMING_THRESHOLD` of 10 means "possible duplicate"; the bands below split
  * that range so a 0 (identical hash) is never shown the same as a borderline 9.
+ * The band is conveyed as VISIBLE TEXT on the tile (with the number), never by
+ * color alone — same rule as the tag category colors.
  */
-function band(distance: number): { label: string; className: string } {
-  if (distance === 0) return { label: "identical", className: "bg-primary/20 text-primary" };
-  if (distance <= 4) return { label: "near-identical", className: "bg-primary/15 text-primary" };
-  if (distance <= 8) return { label: "similar", className: "bg-accent text-accent-foreground" };
-  return { label: "loose", className: "bg-muted text-muted-foreground" };
+function band(distance: number): string {
+  if (distance === 0) return "identical";
+  if (distance <= 4) return "near-identical";
+  if (distance <= 8) return "similar";
+  return "loose";
 }
 
 /**
@@ -87,18 +88,19 @@ export function SimilarPosts({ post }: { post: Post }) {
   );
 }
 
-/** One match: thumbnail (when hydrated), linking to the post, badged with its distance. */
+/** One match: thumbnail (when hydrated), linking to the post, labeled with band + distance. */
 function SimilarTile({ match }: { match: SimilarMatch }) {
   const baseUrl = getClient().baseUrl;
   const post = match.post;
   const variant = post ? thumbnailVariant(post.derivatives) : null;
   const thumb = variant ? mediaUrl(baseUrl, post?.md5, variant.variant) : null;
-  const { label, className } = band(match.distance);
+  const label = band(match.distance);
 
   return (
     <li>
       <Link
         href={`/posts/${match.id}`}
+        aria-label={`Post ${match.id} — ${label}, distance ${match.distance}`}
         title={`Post ${match.id} — ${label} (distance ${match.distance})`}
         className="group relative block aspect-square overflow-hidden rounded-md border border-border/50 bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -106,21 +108,18 @@ function SimilarTile({ match }: { match: SimilarMatch }) {
           // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote media-gateway URLs
           <img
             src={thumb}
-            alt={`Similar post ${match.id}`}
+            alt=""
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
           />
         ) : (
           <MediaPlaceholder label={post?.md5 ?? match.id} />
         )}
-        {/* Distance is text, never color-only. */}
-        <span
-          className={cn(
-            "pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-medium tabular-nums",
-            className,
-          )}
-        >
-          {match.distance}
+        {/* The band is VISIBLE text with the number, on a solid strip so it stays legible over
+            any media (same convention as the post tile's duration badge) — never color-only. */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/70 px-1 py-0.5 text-[10px] font-medium text-white">
+          <span>{label}</span>
+          <span className="tabular-nums">{match.distance}</span>
         </span>
       </Link>
     </li>

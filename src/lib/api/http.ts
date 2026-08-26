@@ -37,19 +37,22 @@ function similarParams(query?: SimilarQuery): string {
 }
 
 /**
- * Unwrap `{similar:[{id, distance}]}`, defensively. Artemis returns matches
- * closest-first and we preserve that order; a missing or non-array envelope
- * yields an empty list rather than throwing (a post with no phash yet is a
- * normal state, not an error).
+ * Unwrap `{similar:[{id, distance}]}`, defensively. A missing or non-array envelope
+ * yields an empty list rather than throwing (a post with no phash yet is a normal
+ * state, not an error). Artemis returns matches closest-first and excludes the
+ * target; both are re-enforced here as cheap client-side backstops (`selfId`
+ * filter + a stable distance sort), matching this file's trust-nothing style.
  */
-function parseSimilar(body: unknown): SimilarPost[] {
+function parseSimilar(body: unknown, selfId?: string): SimilarPost[] {
   const rows = (body as { similar?: unknown })?.similar;
   if (!Array.isArray(rows)) return [];
-  return rows.flatMap((r) => {
-    const row = r as { id?: unknown; distance?: unknown };
-    if (typeof row.id !== "string") return [];
-    return [{ id: row.id, distance: typeof row.distance === "number" ? row.distance : 0 }];
-  });
+  return rows
+    .flatMap((r): SimilarPost[] => {
+      const row = r as { id?: unknown; distance?: unknown };
+      if (typeof row.id !== "string" || row.id === selfId) return [];
+      return [{ id: row.id, distance: typeof row.distance === "number" ? row.distance : 0 }];
+    })
+    .sort((a, b) => a.distance - b.distance);
 }
 
 /**

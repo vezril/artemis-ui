@@ -66,7 +66,10 @@ export function PostView({ id }: { id: string }) {
             <PostActions post={post} />
             <TagSidebar post={post} />
             <PostMetadata post={post} />
-            <SimilarPosts post={post} />
+            {/* Keyed by post id so the panel's "deferred" state resets on navigation — without
+                this, one "Find similar" click would auto-fire the query on every post visited
+                afterwards (the component re-renders in place, it doesn't remount). */}
+            <SimilarPosts key={post.id} post={post} />
           </>
         )}
       </aside>

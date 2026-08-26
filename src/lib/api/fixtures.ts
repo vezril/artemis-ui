@@ -326,7 +326,9 @@ function hash(s: string): number {
 function rankSimilar(target: string, query?: SimilarQuery): SimilarPost[] {
   const threshold = query?.threshold ?? 10;
   const limit = query?.limit ?? 20;
-  return FIXTURE_POSTS.filter((p) => p.id !== target)
+  // Only visible (active) posts can match — a soft-deleted fixture post is hidden
+  // from search, so it must not resurface as a "similar" result either.
+  return FIXTURE_POSTS.filter((p) => p.id !== target && p.status === "active")
     .map((p) => ({ id: p.id, distance: hash(`${target}:${p.id}`) % 16 }))
     .filter((m) => m.distance <= threshold)
     .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id))
