@@ -8,6 +8,7 @@ import { SearchBox } from "@/components/catalog/search-box";
 import { OrderControl } from "@/components/catalog/order-control";
 import { Gallery } from "@/components/catalog/gallery";
 import { FacetStrip } from "@/components/catalog/facet-strip";
+import { SavedSearches } from "@/components/catalog/saved-searches";
 
 /**
  * The search + gallery surface. The DSL query and order live in the URL
@@ -28,6 +29,7 @@ export function SearchPage() {
 
       <div className="flex gap-4">
         <aside className="hidden w-56 shrink-0 lg:block">
+          <SavedSearches />
           <h2 className="mb-2 px-1.5 text-sm font-semibold text-muted-foreground">
             Tags in results
           </h2>

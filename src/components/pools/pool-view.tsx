@@ -239,12 +239,9 @@ export function PoolView({ id }: { id: string }) {
 /** The pool name with an inline rename affordance (pencil → input → ✓/esc). */
 function PoolName({ name, onRename }: { name: string; onRename: (name: string) => void }) {
   const [editing, setEditing] = React.useState(false);
+  // The draft only exists while editing and is (re)initialized on edit entry,
+  // so no resync effect is needed when the (optimistic) name changes at rest.
   const [draft, setDraft] = React.useState(name);
-
-  // Resync the draft when the (optimistic) name changes while not editing.
-  React.useEffect(() => {
-    if (!editing) setDraft(name);
-  }, [name, editing]);
 
   function commit() {
     const trimmed = draft.trim();
@@ -260,7 +257,10 @@ function PoolName({ name, onRename }: { name: string; onRename: (name: string) =
           type="button"
           aria-label="Rename pool"
           className="text-muted-foreground hover:text-foreground"
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setDraft(name);
+            setEditing(true);
+          }}
         >
           <Pencil className="size-4" aria-hidden />
         </button>

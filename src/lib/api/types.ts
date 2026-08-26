@@ -63,7 +63,6 @@ export interface ReprocessResult {
  */
 export interface PostStatusResult {
   id: string;
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   status: "active" | "deleted" | (string & {});
 }
 
@@ -88,7 +87,6 @@ export interface SweepOutcome {
  */
 export interface UploadResult {
   postId: string;
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   status: "pending" | (string & {});
 }
 
@@ -283,6 +281,14 @@ export interface PoolDetail {
   id: string;
   name: string;
   posts: string[];
+}
+
+// --- saved searches ----------------------------------------------------------
+
+/** One saved search: a user-chosen name for a stored DSL query. */
+export interface SavedSearch {
+  name: string;
+  query: string;
 }
 
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
