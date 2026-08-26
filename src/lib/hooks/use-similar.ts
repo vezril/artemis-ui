@@ -24,6 +24,12 @@ export function similarQueryKey(id: string, query?: SimilarQuery) {
  * Hydration failures (a purged post still in the index) degrade to a match without
  * a `post` rather than failing the whole list.
  *
+ * KNOWN LIMITATION: the hydration is one `GET /posts/{id}` per match (up to the
+ * server's default limit of 20), fired concurrently on the user's explicit click —
+ * acceptable at single-user scale, same trade-off as `useTagCategories`. The proper
+ * fix is a server-side hydrated similar endpoint (or a batched id search), not more
+ * client cleverness.
+ *
  * `enabled: false` defers the request until the user actually asks for similars,
  * so opening a post never costs a similarity query.
  */
