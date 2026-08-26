@@ -46,25 +46,39 @@ export function UploadRow({
     gcTime: 0,
   });
 
-  // A retry re-uploads to a NEW postId; reset the bound so the fresh post isn't born
-  // "exhausted" from the previous attempt's count.
-  React.useEffect(() => {
-    setPolls(0);
-  }, [row.postId]);
-
-  // EVERY settled poll — success OR error — counts toward the bound, so a persistently
-  // erroring `getPost` (a transient 502/404/network blip) can't poll forever. A terminal
-  // status is reported up to the controller (which flips the phase and stops the poll).
+  // Poll accounting uses the documented "storing information from previous
+  // renders" pattern (state adjusted DURING render behind change guards) instead
+  // of sync-setState effects. EVERY settled poll — success OR error — counts
+  // toward the bound, so a persistently erroring `getPost` (a transient
+  // 502/404/network blip) can't poll forever.
   const dataStamp = query.dataUpdatedAt;
   const errorStamp = query.errorUpdatedAt;
-  React.useEffect(() => {
-    if (dataStamp === 0 && errorStamp === 0) return;
+
+  // A retry re-uploads to a NEW postId; reset the bound so the fresh post isn't
+  // born "exhausted" from the previous attempt's count.
+  const [prevPostId, setPrevPostId] = React.useState(row.postId);
+  if (row.postId !== prevPostId) {
+    setPrevPostId(row.postId);
+    setPolls(0);
+  }
+
+  // Count each settle exactly once, keyed on the settle timestamps (incl. error
+  // polls) — a Strict Mode double-render no-ops on the guard.
+  const [counted, setCounted] = React.useState({ d: 0, e: 0 });
+  if (
+    (dataStamp !== counted.d || errorStamp !== counted.e) &&
+    !(dataStamp === 0 && errorStamp === 0)
+  ) {
+    setCounted({ d: dataStamp, e: errorStamp });
     setPolls((n) => n + 1);
-    const status = query.data?.status;
+  }
+
+  // A terminal status is reported up to the controller (which flips the phase and
+  // stops the poll) — a parent update, so it belongs in an effect, not in render.
+  const status = query.data?.status;
+  React.useEffect(() => {
     if (status === "active" || status === "failed") onStatus(row.rowId, status);
-    // Keyed on the settle timestamps so each poll counts once, incl. error polls.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataStamp, errorStamp]);
+  }, [status, row.rowId, onStatus]);
 
   const pollErrored = query.isError;
 
