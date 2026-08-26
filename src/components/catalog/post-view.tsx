@@ -9,6 +9,7 @@ import { formatDuration } from "@/lib/catalog/format";
 import { usePost } from "@/lib/hooks/use-catalog";
 import { MediaView } from "@/components/catalog/media-view";
 import { PostActions } from "@/components/catalog/post-actions";
+import { SimilarPosts } from "@/components/catalog/similar-posts";
 import { TagSidebar } from "@/components/catalog/tag-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -65,6 +66,7 @@ export function PostView({ id }: { id: string }) {
             <PostActions post={post} />
             <TagSidebar post={post} />
             <PostMetadata post={post} />
+            <SimilarPosts post={post} />
           </>
         )}
       </aside>

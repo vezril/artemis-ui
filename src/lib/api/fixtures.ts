@@ -15,6 +15,8 @@ import {
   type ReprocessResult,
   type ReviewItem,
   type SearchQuery,
+  type SimilarPost,
+  type SimilarQuery,
   type Suggestion,
   type SweepOutcome,
   type UploadResult,
@@ -313,6 +315,24 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
+/**
+ * Offline stand-in for Artemis's Hamming ranking. There is no real perceptual hash
+ * in fixture mode, so a deterministic hash of the (target, candidate) pair stands in
+ * for the distance — which is enough to exercise the UI's ordering, thresholding,
+ * and limiting. Mirrors the live contract: the target is never its own match, and
+ * results come back closest-first, within `threshold` (default 10), capped at
+ * `limit` (default 20).
+ */
+function rankSimilar(target: string, query?: SimilarQuery): SimilarPost[] {
+  const threshold = query?.threshold ?? 10;
+  const limit = query?.limit ?? 20;
+  return FIXTURE_POSTS.filter((p) => p.id !== target)
+    .map((p) => ({ id: p.id, distance: hash(`${target}:${p.id}`) % 16 }))
+    .filter((m) => m.distance <= threshold)
+    .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id))
+    .slice(0, Math.max(0, limit));
+}
+
 function sortPosts(posts: PostSummary[], order: SearchQuery["order"]): PostSummary[] {
   const sorted = [...posts];
   switch (order) {
@@ -474,6 +494,16 @@ export function fixtureClient(): ArtemisClient {
       // Return a copy so callers never mutate the fixture store directly (only the
       // write methods do); tags/derivatives are copied too since they are arrays.
       return { ...post, tags: [...post.tags], derivatives: [...post.derivatives] };
+    },
+
+    async similarToPost(id: string, query?: SimilarQuery): Promise<SimilarPost[]> {
+      return rankSimilar(id, query);
+    },
+
+    async similarToPhash(phash: string, query?: SimilarQuery): Promise<SimilarPost[]> {
+      // Offline there is no real phash index; treat the hash as an opaque seed so
+      // reverse lookup is deterministic and demonstrable without a live Artemis.
+      return rankSimilar(phash, query);
     },
 
     async facets(tags: string): Promise<Facets> {

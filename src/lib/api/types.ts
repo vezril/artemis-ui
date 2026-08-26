@@ -232,6 +232,28 @@ export interface ReviewItem {
   suggestions: ReviewSuggestion[];
 }
 
+// --- similarity (Tier-1 near-duplicate search) ------------------------------
+//
+// Hephaestus computes a perceptual hash per media; Artemis stores it and ranks
+// near-duplicates by Hamming distance. Both endpoints answer `{similar:[...]}`
+// with matches **closest first** — ids and distances only, so the UI hydrates
+// each match through the normal post read path.
+
+/** One near-duplicate match: a post id and its perceptual-hash Hamming distance. */
+export interface SimilarPost {
+  id: string;
+  /** Hamming distance from the target phash — lower is more similar (0 = identical hash). */
+  distance: number;
+}
+
+/** Optional tuning for a similarity query (server defaults: threshold 10, limit 20). */
+export interface SimilarQuery {
+  /** Max Hamming distance to include. Server clamps; default 10. */
+  threshold?: number;
+  /** Max matches to return. Server clamps; default 20. */
+  limit?: number;
+}
+
 /** An API error surfaced from a non-2xx `{ "error": "..." }` body. */
 export class ApiError extends Error {
   constructor(
