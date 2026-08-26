@@ -87,6 +87,12 @@ describe("fixtureClient saved searches (parity)", () => {
     await expect(c.saveSearch("Landscapes", "x")).rejects.toMatchObject({ status: 409 });
     await expect(c.saveSearch("   ", "x")).rejects.toMatchObject({ status: 400 });
 
+    // Renaming ONTO an existing name is rejected (entity SavedSearchNameConflict) —
+    // the UI keys rows by name, so uniqueness is load-bearing.
+    await expect(c.renameSavedSearch("Landscapes", "Cat girls")).rejects.toMatchObject({
+      status: 409,
+    });
+
     await c.renameSavedSearch("Landscapes", "Wide shots");
     const renamed = await c.listSavedSearches();
     expect(renamed.some((s) => s.name === "Wide shots")).toBe(true);

@@ -41,6 +41,12 @@ export interface SavedSearchMutations {
  * serializes them (rapid rename→delete can't interleave); wire payloads are
  * single-name intents, so a queued replay after a rollback stays semantically
  * safe (no reorder-style whole-state staleness).
+ *
+ * CAVEAT (same accepted trade-off as pools): `onMutate` runs eagerly while the
+ * network calls serialize, so a rollback restores the snapshot taken at ITS
+ * click time — which can transiently clobber a later queued mutation's
+ * optimistic patch. Visually self-healing: every onSettled invalidation
+ * refetches truth.
  */
 export function useSavedSearchMutations(): SavedSearchMutations {
   const qc = useQueryClient();

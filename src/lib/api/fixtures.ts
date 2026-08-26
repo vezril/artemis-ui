@@ -770,6 +770,11 @@ export function fixtureClient(): ArtemisClient {
       if (!entry) throw new ApiError("saved search does not exist", 404);
       const trimmed = to.trim();
       if (!trimmed || trimmed.length > 128) throw new ApiError("invalid search name", 400);
+      // The entity rejects renaming ONTO an existing name (SavedSearchNameConflict) —
+      // and the UI depends on name uniqueness for row identity, so the fixture must too.
+      if (trimmed !== from && savedSearches.some((s0) => s0.name === trimmed)) {
+        throw new ApiError("a search with this name already exists", 409);
+      }
       entry.name = trimmed;
     },
 

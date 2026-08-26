@@ -31,7 +31,7 @@
 ## 4. Verification
 
 - [x] 4.1 Full gate: lint, typecheck, vitest, `next build`.
-- [ ] 4.2 Frontend-review subagent pass; apply should-fixes.
+- [x] 4.2 Frontend-review subagent pass; apply should-fixes.
 - [x] 4.3 Browser smoke on fixtures: list renders → run applies query → save current → rename →
   delete (two-step) → empty state.
 - [x] 4.4 `openspec validate design-artemis-ui-saved-searches --strict` clean.

@@ -93,7 +93,8 @@ describe("SavedSearches", () => {
     wrap(<SavedSearches />);
 
     await user.click(await screen.findByRole("button", { name: "Cat girls" }));
-    expect(router.push).toHaveBeenCalledWith("/search?tags=1girl%20cat_ears");
+    // Via the shared searchHref builder — same `+`-for-space encoding as facet links.
+    expect(router.push).toHaveBeenCalledWith("/search?tags=1girl+cat_ears");
   });
 
   it("saves the current query under a name", async () => {
@@ -162,6 +163,35 @@ describe("SavedSearches", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Cat girls" })).toBeNull(),
     );
+  });
+
+  it("Escape cancels an in-progress rename without mutating", async () => {
+    const user = userEvent.setup();
+    wrap(<SavedSearches />);
+    await screen.findByRole("button", { name: "Cat girls" });
+
+    await user.click(screen.getByRole("button", { name: /rename cat girls/i }));
+    const input = screen.getByRole("textbox", { name: /new name for cat girls/i });
+    await user.clear(input);
+    await user.type(input, "Half-typed{Escape}");
+
+    expect(api.renameSavedSearch).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "Cat girls" })).toBeTruthy();
+  });
+
+  it("attributes a rename failure to ITS row (per-row error, not a shared string)", async () => {
+    const user = userEvent.setup();
+    api.state.failNext = "renameSavedSearch";
+    wrap(<SavedSearches />);
+    await screen.findByRole("button", { name: "Cat girls" });
+
+    await user.click(screen.getByRole("button", { name: /rename cat girls/i }));
+    const input = screen.getByRole("textbox", { name: /new name for cat girls/i });
+    await user.clear(input);
+    await user.type(input, "Felines{Enter}");
+    const alert = await screen.findByRole("alert");
+    // The error renders inside the failing row's list item.
+    expect(alert.closest("li")?.textContent).toContain("Cat girls");
   });
 
   it("shows the designed empty state", async () => {

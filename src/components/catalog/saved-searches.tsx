@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Bookmark, BookmarkPlus, Check, Pencil, X } from "lucide-react";
 
 import type { SavedSearch } from "@/lib/api/types";
+import { searchHref } from "@/lib/catalog/query";
 import { useSavedSearches, useSavedSearchMutations } from "@/lib/hooks/use-saved-searches";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,10 +28,13 @@ export function SavedSearches() {
   const [saving, setSaving] = React.useState(false);
   const [saveName, setSaveName] = React.useState("");
   const [saveError, setSaveError] = React.useState<string | null>(null);
-  const [rowError, setRowError] = React.useState<string | null>(null);
+  // Per-row errors keyed by the row's name at mutate time, so two failing rows
+  // can't overwrite each other and a stale error can't outlive its row's success.
+  const [rowErrors, setRowErrors] = React.useState<Record<string, string>>({});
 
   function run(query: string) {
-    router.push(`/search?tags=${encodeURIComponent(query)}`);
+    // Through the shared href builder (same encoding path as facet/tag links).
+    router.push(searchHref(query));
   }
 
   function submitSave(e: React.FormEvent) {
@@ -75,24 +79,30 @@ export function SavedSearches() {
             <SavedSearchRow
               key={entry.name}
               entry={entry}
+              error={rowErrors[entry.name]}
               onRun={() => run(entry.query)}
               onRename={(to) => {
-                setRowError(null);
-                rename.mutate({ from: entry.name, to }, { onError: (e) => setRowError(e.message) });
+                const from = entry.name;
+                setRowErrors((prev) => without(prev, from));
+                rename.mutate(
+                  { from, to },
+                  {
+                    onSuccess: () => setRowErrors((prev) => without(prev, from)),
+                    onError: (e) => setRowErrors((prev) => ({ ...prev, [from]: e.message })),
+                  },
+                );
               }}
               onDelete={() => {
-                setRowError(null);
-                remove.mutate(entry.name, { onError: (e) => setRowError(e.message) });
+                const name = entry.name;
+                setRowErrors((prev) => without(prev, name));
+                remove.mutate(name, {
+                  onSuccess: () => setRowErrors((prev) => without(prev, name)),
+                  onError: (e) => setRowErrors((prev) => ({ ...prev, [name]: e.message })),
+                });
               }}
             />
           ))}
         </ul>
-      )}
-
-      {rowError && (
-        <p role="alert" className="mt-1 px-1.5 text-xs text-destructive">
-          {rowError}
-        </p>
       )}
 
       <div className="mt-2 px-1.5">
@@ -157,11 +167,13 @@ export function SavedSearches() {
 /** One saved search row: run (name button), inline rename, two-step delete. */
 function SavedSearchRow({
   entry,
+  error,
   onRun,
   onRename,
   onDelete,
 }: {
   entry: SavedSearch;
+  error?: string;
   onRun: () => void;
   onRename: (to: string) => void;
   onDelete: () => void;
@@ -201,7 +213,13 @@ function SavedSearchRow({
             }}
             className="h-7 text-sm"
           />
-          <Button type="submit" size="sm" variant="ghost" aria-label="Save name">
+          <Button
+            type="submit"
+            size="sm"
+            variant="ghost"
+            aria-label="Save name"
+            disabled={!draft.trim()}
+          >
             <Check className="size-3.5" aria-hidden />
           </Button>
         </form>
@@ -210,7 +228,8 @@ function SavedSearchRow({
   }
 
   return (
-    <li className="group flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-accent/50">
+    <li className="group rounded-md px-1.5 py-0.5 hover:bg-accent/50">
+      <div className="flex items-center gap-1">
       <button
         type="button"
         onClick={onRun}
@@ -261,6 +280,20 @@ function SavedSearchRow({
           </button>
         </span>
       )}
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </li>
   );
+}
+
+/** Return `record` without `key` (no-op copy when absent). */
+function without(record: Record<string, string>, key: string): Record<string, string> {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
 }
