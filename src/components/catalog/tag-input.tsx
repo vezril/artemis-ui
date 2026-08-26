@@ -45,7 +45,11 @@ export function TagInput({
   );
   const showSuggestions = focused && draft.trim().length > 0 && suggestions.length > 0;
 
-  React.useEffect(() => setActiveIndex(-1), [draft]);
+  /** Change the draft and reset the suggestion highlight together (no sync effect). */
+  function updateDraft(value: string) {
+    setDraft(value);
+    setActiveIndex(-1);
+  }
 
   function add(name: string) {
     const clean = normalizeTag(name);
@@ -53,7 +57,7 @@ export function TagInput({
     // wildcard `*`, or any other stray char) so it can't be saved as a literal tag.
     if (!/^[a-z0-9_]+$/.test(clean)) return;
     onAdd(clean);
-    setDraft("");
+    updateDraft("");
   }
 
   function pick(s: Suggestion) {
@@ -79,7 +83,7 @@ export function TagInput({
       e.preventDefault();
       add(draft);
     } else if (e.key === "Escape") {
-      setDraft("");
+      updateDraft("");
     }
   }
 
@@ -91,7 +95,7 @@ export function TagInput({
           ref={inputRef}
           value={draft}
           disabled={disabled}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => updateDraft(e.target.value)}
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}

@@ -55,7 +55,11 @@ export function SearchBox({ className }: { className?: string }) {
   );
   const categories = useTagCategories(tagNames);
 
-  React.useEffect(() => setActiveIndex(-1), [draft]);
+  /** Change the draft and reset the suggestion highlight together (no sync effect). */
+  function updateDraft(value: string) {
+    setDraft(value);
+    setActiveIndex(-1);
+  }
 
   function navigate(nextTerms: string[]) {
     router.push(searchHref(nextTerms.join(" "), order));
@@ -65,7 +69,7 @@ export function SearchBox({ className }: { className?: string }) {
     const t = term.trim();
     if (!t) return;
     if (!terms.includes(t)) navigate([...terms, t]);
-    setDraft("");
+    updateDraft("");
   }
 
   function pick(s: Suggestion) {
@@ -101,7 +105,7 @@ export function SearchBox({ className }: { className?: string }) {
       e.preventDefault();
       removeAt(terms.length - 1);
     } else if (e.key === "Escape") {
-      setDraft("");
+      updateDraft("");
       inputRef.current?.blur();
     }
   }
@@ -127,7 +131,7 @@ export function SearchBox({ className }: { className?: string }) {
         <input
           ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => updateDraft(e.target.value)}
           onKeyDown={onKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}

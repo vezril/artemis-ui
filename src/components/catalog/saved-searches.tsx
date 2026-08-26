@@ -179,13 +179,10 @@ function SavedSearchRow({
   onDelete: () => void;
 }) {
   const [editing, setEditing] = React.useState(false);
+  // The draft only exists while editing and is (re)initialized on edit entry,
+  // so no resync effect is needed when the (optimistic) name changes at rest.
   const [draft, setDraft] = React.useState(entry.name);
   const [confirming, setConfirming] = React.useState(false);
-
-  // Resync the draft when the (optimistic) name changes while not editing.
-  React.useEffect(() => {
-    if (!editing) setDraft(entry.name);
-  }, [entry.name, editing]);
 
   if (editing) {
     return (
@@ -266,7 +263,10 @@ function SavedSearchRow({
             type="button"
             aria-label={`Rename ${entry.name}`}
             className="rounded p-1 text-muted-foreground hover:text-foreground"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setDraft(entry.name);
+              setEditing(true);
+            }}
           >
             <Pencil className="size-3.5" aria-hidden />
           </button>

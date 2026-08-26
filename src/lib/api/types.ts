@@ -63,7 +63,6 @@ export interface ReprocessResult {
  */
 export interface PostStatusResult {
   id: string;
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   status: "active" | "deleted" | (string & {});
 }
 
@@ -88,7 +87,6 @@ export interface SweepOutcome {
  */
 export interface UploadResult {
   postId: string;
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   status: "pending" | (string & {});
 }
 
