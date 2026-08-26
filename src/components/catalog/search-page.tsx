@@ -37,7 +37,17 @@ export function SearchPage() {
         </aside>
 
         <div className="min-w-0 flex-1">
-          <Gallery tags={tags} order={order} />
+          {/* No query = browse-all (Artemis returns the whole visible catalog, newest first),
+              so an empty result differentiates "empty catalog" from "no match". */}
+          <Gallery
+            tags={tags}
+            order={order}
+            emptyMessage={
+              tags.trim()
+                ? "No posts match this search."
+                : "No posts yet — upload something to get started."
+            }
+          />
         </div>
       </div>
     </div>
