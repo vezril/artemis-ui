@@ -1,8 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Telescope } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { NAV } from "./nav";
@@ -10,9 +10,10 @@ import { ConnectionIndicator } from "./connection-indicator";
 import { ReviewNavBadge } from "./review-nav-badge";
 
 /**
- * The persistent console shell: a header (brand + connection indicator) and a left
- * navigation grouped into Operations and Catalog, wrapping every route. Catalog
- * entries not yet built render disabled ("Soon").
+ * The persistent console shell: a header (the Artemis god mark + name and the
+ * connection indicator) and a left navigation grouped into Operations and Catalog,
+ * wrapping every route. The mark also washes the main content area as a faint,
+ * non-interactive watermark. Catalog entries not yet built render disabled ("Soon").
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -21,7 +22,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-border px-4">
         <Link href="/health" className="flex items-center gap-2 font-semibold">
-          <Telescope className="size-5 text-primary" aria-hidden="true" />
+          <Image
+            src="/artemis-mark-small.png"
+            alt=""
+            width={36}
+            height={36}
+            priority
+            className="size-9 select-none"
+          />
           <span>Artemis UI</span>
           <span className="text-xs font-normal text-muted-foreground">console</span>
         </Link>
@@ -84,7 +92,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="relative min-w-0 flex-1">
+          {/* The Artemis mark as a fixed watermark behind the main content: centered over the
+              content column (offset past the sidebar on md+), non-interactive, and faint enough
+              to sit under data without competing with it. -z-10 paints it above the page
+              background but below everything in flow. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed inset-y-0 left-0 right-0 -z-10 flex items-center justify-center md:left-56"
+          >
+            <Image
+              src="/artemis-mark.png"
+              alt=""
+              width={520}
+              height={520}
+              className="select-none opacity-[0.08]"
+            />
+          </div>
+          {children}
+        </main>
       </div>
     </div>
   );
